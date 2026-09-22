@@ -87,12 +87,17 @@ def progress(run_id: int, db: Session = Depends(get_session)):
 
 @router.post("/{run_id}/resume", response_model=RunOut)
 async def resume(run_id: int, db: Session = Depends(get_session)):
-    """failed/cancelled run을 이어서 실행 (완료된 항목은 스킵)."""
+    """failed/cancelled run을 이어서 실행 (성공한 항목은 스킵, 에러 항목은 재시도)."""
     run = db.get(Run, run_id)
     if run is None:
         raise HTTPException(404, "run 없음")
     if run.status in ("running", "pending"):
         raise HTTPException(409, "이미 실행 중입니다")
+    from ..orm import Prediction
+
+    db.query(Prediction).filter(
+        Prediction.run_id == run_id, Prediction.status == "error"
+    ).delete(synchronize_session=False)
     run.status = "pending"
     run.error = None
     run.finished_at = None

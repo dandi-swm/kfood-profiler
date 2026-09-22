@@ -132,3 +132,40 @@ def test_cancel_and_resume(app_client):
     ))
     assert progress["done"] == 20
     assert progress["errors"] == 0
+
+
+def test_resume_retries_errored_items(app_client):
+    """resume은 성공 항목은 유지하고 에러 항목만 지워 재시도해야 한다."""
+    import sqlalchemy as sa
+
+    from app.db import new_session
+    from app.orm import Prediction, Run
+
+    runs = app_client.get('/api/runs').json()
+    run_id = next(r['id'] for r in runs if r['status'] == 'completed')
+
+    # 완료된 run의 prediction 2개를 인위적으로 에러로 바꾸고 run을 failed 처리
+    with new_session() as db:
+        ids = db.scalars(
+            sa.select(Prediction.id).where(Prediction.run_id == run_id).limit(2)
+        ).all()
+        db.query(Prediction).filter(Prediction.id.in_(ids)).update(
+            {'status': 'error', 'is_correct': None, 'error': 'fake 429'},
+            synchronize_session=False,
+        )
+        db.get(Run, run_id).status = 'failed'
+        db.commit()
+        total = db.scalar(
+            sa.select(sa.func.count(Prediction.id)).where(Prediction.run_id == run_id)
+        )
+
+    r = app_client.post(f'/api/runs/{run_id}/resume')
+    assert r.status_code == 200
+
+    progress = _wait_for(lambda: (
+        (p := app_client.get(f'/api/runs/{run_id}/progress').json())
+        if app_client.get(f'/api/runs/{run_id}/progress').json()['status'] == 'completed'
+        else None
+    ))
+    assert progress['done'] == total  # 에러 2건이 재시도되어 다시 채워짐
+    assert progress['errors'] == 0

@@ -9,6 +9,8 @@ from .runner import recover_interrupted_runs
 from .routers import dataset, images, manifests, models, results, runs
 
 logging.basicConfig(level=logging.INFO)
+# google-genai SDK가 호출마다 찍는 AFC INFO/WARNING 로그 억제 (동작과 무관한 소음)
+logging.getLogger("google_genai.models").setLevel(logging.ERROR)
 
 
 @asynccontextmanager
