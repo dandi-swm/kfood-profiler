@@ -63,6 +63,18 @@ export default function DashboardPage() {
     }).filter((r) => Object.keys(r).length > 1)
   }, [byVariant, effective, runs])
 
+  const latencyChart = useMemo(() => {
+    if (!byVariant) return []
+    return VARIANT_TYPES.map((vt) => {
+      const row: Record<string, string | number> = { variant: vt }
+      effective.forEach((rid) => {
+        const found = byVariant.find((r) => r.run_id === rid && r.variant_type === vt)
+        if (found?.avg_latency_ms != null) row[runName(rid)] = Math.round(found.avg_latency_ms)
+      })
+      return row
+    }).filter((r) => Object.keys(r).length > 1)
+  }, [byVariant, effective, runs])
+
   const classChart = useMemo(() => {
     if (!byClass) return []
     return [...byClass]
@@ -124,6 +136,95 @@ export default function DashboardPage() {
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis dataKey="variant" />
             <YAxis unit="%" domain={[0, 100]} />
+            <Tooltip />
+            <Legend />
+            {effective.map((rid, i) => (
+              <Bar key={rid} dataKey={runName(rid)} fill={COLORS[i % COLORS.length]} />
+            ))}
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+
+      <div className="card">
+        <h3 style={{ marginTop: 0 }}>원본 대비 상대 성능</h3>
+        <p className="muted" style={{ marginTop: 0 }}>
+          같은 사진들의 original 결과를 100% 기준으로, 각 변형이 상대적으로 얼마나 나빠지는지 / 얼마나 빨라지는지.
+        </p>
+        {effective.map((rid) => {
+          const rows = byVariant?.filter((r) => r.run_id === rid) ?? []
+          const base = rows.find((r) => r.variant_type === 'original')
+          if (!rows.length) return null
+          return (
+            <div key={rid} style={{ marginBottom: 18 }}>
+              <strong style={{ fontSize: 13 }}>{runName(rid)}</strong>
+              {!base && (
+                <span className="muted"> — original 변형이 없어 상대 비교 불가</span>
+              )}
+              <table style={{ marginTop: 6 }}>
+                <thead>
+                  <tr>
+                    <th>변형</th>
+                    <th>정확도</th>
+                    <th>원본 대비</th>
+                    <th>하락폭</th>
+                    <th>평균 처리시간</th>
+                    <th>처리시간 배율</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {VARIANT_TYPES.map((vt) => {
+                    const r = rows.find((x) => x.variant_type === vt)
+                    if (!r) return null
+                    const isBase = vt === 'original'
+                    const acc = r.accuracy
+                    const rel =
+                      base?.accuracy != null && base.accuracy > 0 && acc != null
+                        ? (acc / base.accuracy) * 100
+                        : null
+                    const dp =
+                      base?.accuracy != null && acc != null
+                        ? (acc - base.accuracy) * 100
+                        : null
+                    const latRatio =
+                      base?.avg_latency_ms != null && base.avg_latency_ms > 0 && r.avg_latency_ms != null
+                        ? r.avg_latency_ms / base.avg_latency_ms
+                        : null
+                    const dpColor = dp == null || isBase ? '#889' : dp < -1 ? '#c22' : dp > 1 ? '#147a3d' : '#889'
+                    return (
+                      <tr key={vt}>
+                        <td>{vt}{isBase && <span className="muted"> (기준)</span>}</td>
+                        <td>{pct(acc)}</td>
+                        <td>{isBase ? '100%' : rel != null ? `${rel.toFixed(1)}%` : '–'}</td>
+                        <td style={{ color: dpColor, fontWeight: isBase ? 400 : 600 }}>
+                          {isBase ? '–' : dp != null ? `${dp > 0 ? '+' : ''}${dp.toFixed(1)}%p` : '–'}
+                        </td>
+                        <td>{r.avg_latency_ms != null ? `${Math.round(r.avg_latency_ms)}ms` : '–'}</td>
+                        <td>
+                          {isBase ? '×1.00' : latRatio != null ? `×${latRatio.toFixed(2)}` : '–'}
+                          {!isBase && latRatio != null && latRatio < 0.95 && (
+                            <span style={{ color: '#147a3d' }}> (빠름)</span>
+                          )}
+                          {!isBase && latRatio != null && latRatio > 1.05 && (
+                            <span style={{ color: '#c22' }}> (느림)</span>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )
+        })}
+      </div>
+
+      <div className="card">
+        <h3 style={{ marginTop: 0 }}>변형별 평균 처리시간 (ms)</h3>
+        <ResponsiveContainer width="100%" height={280}>
+          <BarChart data={latencyChart}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="variant" />
+            <YAxis unit="ms" />
             <Tooltip />
             <Legend />
             {effective.map((rid, i) => (
