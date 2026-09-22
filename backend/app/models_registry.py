@@ -21,18 +21,18 @@ MODEL_CATALOG: dict[str, ModelInfo] = {
     m.model_id: m
     for m in [
         ModelInfo(
-            model_id="gemini-flash-latest",
+            model_id="gemini-3.8-flash",
             provider="gemini",
-            provider_model="gemini-flash-latest",
-            display_name="Gemini Flash (latest)",
+            provider_model="gemini-3.8-flash",
+            display_name="Gemini 3.8 Flash",
             usd_per_m_input=0.30,
             usd_per_m_output=2.50,
         ),
         ModelInfo(
-            model_id="gemini-flash-lite-latest",
+            model_id="gemini-3.5-flash-lite",
             provider="gemini",
-            provider_model="gemini-flash-lite-latest",
-            display_name="Gemini Flash-Lite (latest)",
+            provider_model="gemini-3.5-flash-lite",
+            display_name="Gemini 3.5 Flash Lite",
             usd_per_m_input=0.10,
             usd_per_m_output=0.40,
         ),
