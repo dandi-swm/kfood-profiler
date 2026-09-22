@@ -10,6 +10,7 @@ export interface ModelInfo {
   display_name: string
   usd_per_m_input: number
   usd_per_m_output: number
+  thinking: boolean
 }
 
 export type VariantType = 'original' | 'resize512' | 'resize256' | 'q85' | 'q50'

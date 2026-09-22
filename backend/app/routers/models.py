@@ -15,6 +15,7 @@ def list_models():
             display_name=m.display_name,
             usd_per_m_input=m.usd_per_m_input,
             usd_per_m_output=m.usd_per_m_output,
+            thinking=m.thinking,
         )
         for m in MODEL_CATALOG.values()
     ]

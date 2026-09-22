@@ -17,6 +17,7 @@ class ModelOut(BaseModel):
     display_name: str
     usd_per_m_input: float
     usd_per_m_output: float
+    thinking: bool = False
 
 
 class ManifestCreate(BaseModel):
