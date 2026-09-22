@@ -27,6 +27,7 @@ export default function DashboardPage() {
     [runs],
   )
   const [selectedRuns, setSelectedRuns] = useState<number[]>([])
+  const [showAllMatrix, setShowAllMatrix] = useState(false)
   const effective = selectedRuns.length ? selectedRuns : doneRuns.slice(0, 1).map((r) => r.id)
   const isCompare = effective.length === 2
 
@@ -135,6 +136,19 @@ export default function DashboardPage() {
       get: (rid: number, c: string, v: string) => map.get(`${rid}|${c}|${v}`),
     }
   }, [matrix])
+
+  // 매트릭스: 오답/에러가 하나라도 있는 클래스만 (전체 보기 토글 가능)
+  const matrixClasses = useMemo(() => {
+    if (showAllMatrix) return matrixData.classes
+    return matrixData.classes.filter((c) =>
+      effective.some((rid) =>
+        VARIANT_TYPES.some((v) => {
+          const cell = matrixData.get(rid, c, v)
+          return cell != null && ((cell.accuracy != null && cell.accuracy < 1) || cell.errors > 0)
+        }),
+      ),
+    )
+  }, [matrixData, effective, showAllMatrix])
 
   // run별 오답 카테고리 분포: 상위 7개 + 기타 (도넛)
   const wrongPies = useMemo(() => {
@@ -454,8 +468,19 @@ export default function DashboardPage() {
 
       <div className="card">
         <h3 style={{ marginTop: 0 }}>
-          클래스 × 변형 매트릭스 {isCompare && <span className="muted">— 셀: A / B</span>} (셀 클릭 → 드릴다운)
+          클래스 × 변형 매트릭스 {isCompare && <span className="muted">— 셀: A / B</span>} (셀 클릭 → 오답 드릴다운)
         </h3>
+        <p className="muted" style={{ marginTop: 0 }}>
+          기본으로 오답/에러가 있는 클래스만 표시됩니다 ({matrixClasses.length}/{matrixData.classes.length}개).{' '}
+          <label style={{ display: 'inline' }}>
+            <input
+              type="checkbox"
+              checked={showAllMatrix}
+              onChange={(e) => setShowAllMatrix(e.target.checked)}
+            />{' '}
+            전체 클래스 보기
+          </label>
+        </p>
         <div style={{ maxHeight: 420, overflowY: 'auto' }}>
           <table>
             <thead>
@@ -465,7 +490,7 @@ export default function DashboardPage() {
               </tr>
             </thead>
             <tbody>
-              {matrixData.classes.map((c) => (
+              {matrixClasses.map((c) => (
                 <tr key={c}>
                   <td>{c}</td>
                   {VARIANT_TYPES.map((v) => {
@@ -489,10 +514,10 @@ export default function DashboardPage() {
                         key={v}
                         className="matrix-cell"
                         style={{ background: bg }}
-                        title={isCompare ? 'A 기준 드릴다운으로 이동' : '클릭하면 해당 예측들을 봅니다'}
+                        title={isCompare ? 'A 기준 오답 드릴다운으로 이동' : '클릭하면 해당 셀의 오답들을 봅니다'}
                         onClick={() =>
                           navigate(
-                            `/predictions?run_id=${effective[0]}&class_label=${encodeURIComponent(c)}&variant_type=${v}`,
+                            `/predictions?run_id=${effective[0]}&class_label=${encodeURIComponent(c)}&variant_type=${v}&is_correct=false`,
                           )
                         }
                       >
