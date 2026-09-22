@@ -1,3 +1,4 @@
+import type React from 'react'
 import type {
   AggRow,
   ClassInfo,
@@ -28,7 +29,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>
 }
 
-export const api = {
+const liveApi = {
   classes: () => request<ClassInfo[]>('/api/dataset/classes'),
   models: () => request<ModelInfo[]>('/api/models'),
 
@@ -95,8 +96,32 @@ export const api = {
   },
 }
 
+export const IS_STATIC = import.meta.env.VITE_STATIC === '1'
+
+import { staticApi, staticSampleImageUrl, staticVariantImageUrl } from './static'
+
+export const api: typeof liveApi = IS_STATIC
+  ? (staticApi as unknown as typeof liveApi)
+  : liveApi
+
 export function variantImageUrl(variantId: number): string {
-  return `/api/images/variants/${variantId}`
+  return IS_STATIC ? staticVariantImageUrl(variantId) : `/api/images/variants/${variantId}`
+}
+
+export function sampleImageUrl(sampleId: number): string {
+  return IS_STATIC ? staticSampleImageUrl(sampleId) : `/api/images/samples/${sampleId}`
+}
+
+// 정적 모드에서 이미지가 미포함(정답 샘플)일 때 표시할 플레이스홀더
+export const IMG_FALLBACK =
+  'data:image/svg+xml;utf8,' +
+  encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="260" height="192"><rect width="100%" height="100%" fill="#e8eaf3"/><text x="50%" y="50%" text-anchor="middle" fill="#99a" font-size="13" font-family="sans-serif">이미지 미포함 (정답 샘플)</text></svg>`,
+  )
+
+export function onImgError(e: React.SyntheticEvent<HTMLImageElement>): void {
+  const img = e.currentTarget
+  if (img.src !== IMG_FALLBACK) img.src = IMG_FALLBACK
 }
 
 export type { Prediction }

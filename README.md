@@ -40,6 +40,27 @@ GEMINI_API_KEY=...
 
 비용 감각: 전체 기본 실행(2,860샘플 × 5변형 ≈ 14,300호출)은 Gemini Flash 기준 약 $5 내외 (스모크 실측: 호출당 ~$0.00035). 취소/이어서 실행(resume) 지원.
 
+## 정적 리포트 배포 (GitHub Pages)
+
+API 없이 **결과 조회만** 가능한 정적 리포트를 만들 수 있다 (실행·생성 기능 제거, 대시보드/드릴다운만):
+
+```bash
+# 1) DB에서 리포트 데이터 내보내기 (완료된 run + 오답 샘플 이미지)
+cd backend && .venv/bin/python scripts/export_report.py
+
+# 2) 정적 모드로 빌드 → docs/report/
+cd ../frontend
+VITE_STATIC=1 npx vite build --base=./ --outDir=../docs/report --emptyOutDir
+cp -r ../report-data ../docs/report/report-data
+```
+
+GitHub 저장소 Settings → Pages → Source를 **main 브랜치 `/docs`**로 설정하면
+`https://<org>.github.io/<repo>/report/` 에서 서비스된다.
+새 run을 추가한 뒤에는 1~2번을 다시 실행해 커밋하면 갱신된다.
+
+- 데이터: run 메타 + 전체 예측 JSON, 오답/에러 샘플의 이미지 썸네일만 포함 (~30MB)
+- 정답 샘플 이미지는 용량 문제로 미포함 → 플레이스홀더 표시
+
 ## 문서
 
 시스템 전체 구조(DB 스키마, API, 핵심 로직, 함정 목록)는 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) 참고.

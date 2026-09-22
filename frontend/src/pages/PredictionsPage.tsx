@@ -1,14 +1,14 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
-import { api, variantImageUrl } from '../api/client'
+import { api, onImgError, variantImageUrl } from '../api/client'
 import type { Prediction } from '../api/types'
 import { VARIANT_TYPES } from '../api/types'
 
 function PredictionCard({ p, onCompare }: { p: Prediction; onCompare: (sampleId: number) => void }) {
   return (
     <div className="pred-card">
-      <img src={variantImageUrl(p.variant_id)} alt={p.class_label} loading="lazy" />
+      <img src={variantImageUrl(p.variant_id)} alt={p.class_label} loading="lazy" onError={onImgError} />
       <div className="meta">
         <div className="labels">
           정답 <strong>{p.class_label}</strong>
@@ -60,7 +60,7 @@ function VariantStrip({ runId, sampleId }: { runId: number; sampleId: number }) 
       <div className="variant-strip">
         {ordered.map((p) => (
           <div className="vs-item" key={p.id}>
-            <img src={variantImageUrl(p.variant_id)} alt={p.variant_type} />
+            <img src={variantImageUrl(p.variant_id)} alt={p.variant_type} onError={onImgError} />
             <div>
               <strong>{p.variant_type}</strong> {p.width}×{p.height} · {(p.bytes / 1024).toFixed(0)}KB
             </div>

@@ -5,7 +5,7 @@ import {
   Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart,
   ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts'
-import { api, variantImageUrl } from '../api/client'
+import { api, onImgError, sampleImageUrl, variantImageUrl } from '../api/client'
 import type { AggRow, VariantType } from '../api/types'
 import { VARIANT_TYPES } from '../api/types'
 
@@ -632,6 +632,7 @@ export default function DashboardPage() {
                         src={variantImageUrl(anchor.variant_id)}
                         alt={anchor.class_label}
                         loading="lazy"
+                        onError={onImgError}
                         onClick={() => setLightbox({ sampleId: sid, label: anchor.class_label })}
                       />
                       <div className="info" style={{ flex: 1 }}>
@@ -693,6 +694,7 @@ export default function DashboardPage() {
                       src={variantImageUrl(p.variant_id)}
                       alt={p.class_label}
                       loading="lazy"
+                      onError={onImgError}
                       onClick={() => setLightbox({ sampleId: p.sample_id, label: p.class_label })}
                     />
                     <div className="info">
@@ -731,7 +733,7 @@ export default function DashboardPage() {
 
       {lightbox && (
         <div className="lightbox-overlay" onClick={() => setLightbox(null)}>
-          <img src={`/api/images/samples/${lightbox.sampleId}`} alt={lightbox.label} />
+          <img src={sampleImageUrl(lightbox.sampleId)} alt={lightbox.label} onError={onImgError} />
           <div className="lightbox-caption">
             {lightbox.label} (sample #{lightbox.sampleId}) — 원본 이미지 · 클릭하면 닫힘
           </div>

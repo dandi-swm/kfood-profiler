@@ -7,3 +7,6 @@ __pycache__/
 dist/
 .DS_Store
 .pytest_cache/
+
+# 정적 리포트 내보내기 산출물 (docs/report에 복사본이 커밋됨)
+/report-data/
