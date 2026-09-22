@@ -29,6 +29,7 @@ export default function DashboardPage() {
   const [selectedRuns, setSelectedRuns] = useState<number[]>([])
   const [showAllMatrix, setShowAllMatrix] = useState(false)
   const [dialogCell, setDialogCell] = useState<{ cls: string; vt: VariantType | null } | null>(null)
+  const [lightbox, setLightbox] = useState<{ sampleId: number; label: string } | null>(null)
   const effective = selectedRuns.length ? selectedRuns : doneRuns.slice(0, 1).map((r) => r.id)
   const isCompare = effective.length === 2
 
@@ -626,7 +627,12 @@ export default function DashboardPage() {
                   const anchor = find(itemsA, sid, 'original') ?? itemsA.find((p) => p.sample_id === sid)!
                   return (
                     <div className="pred-row" key={sid} style={{ alignItems: 'flex-start' }}>
-                      <img src={variantImageUrl(anchor.variant_id)} alt={anchor.class_label} loading="lazy" />
+                      <img
+                        src={variantImageUrl(anchor.variant_id)}
+                        alt={anchor.class_label}
+                        loading="lazy"
+                        onClick={() => setLightbox({ sampleId: sid, label: anchor.class_label })}
+                      />
                       <div className="info" style={{ flex: 1 }}>
                         <div>정답: <strong>{anchor.class_label}</strong> <span className="muted">(sample #{sid})</span></div>
                         <table style={{ marginTop: 6 }}>
@@ -682,7 +688,12 @@ export default function DashboardPage() {
                 const b = bBySample.get(p.sample_id)
                 return (
                   <div className="pred-row" key={p.sample_id}>
-                    <img src={variantImageUrl(p.variant_id)} alt={p.class_label} loading="lazy" />
+                    <img
+                      src={variantImageUrl(p.variant_id)}
+                      alt={p.class_label}
+                      loading="lazy"
+                      onClick={() => setLightbox({ sampleId: p.sample_id, label: p.class_label })}
+                    />
                     <div className="info">
                       <div>정답: <strong>{p.class_label}</strong> <span className="muted">(sample #{p.sample_id})</span></div>
                       <div style={{ marginTop: 4 }}>
@@ -713,6 +724,15 @@ export default function DashboardPage() {
                 드릴다운 페이지에서 자세히 보기
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {lightbox && (
+        <div className="lightbox-overlay" onClick={() => setLightbox(null)}>
+          <img src={`/api/images/samples/${lightbox.sampleId}`} alt={lightbox.label} />
+          <div className="lightbox-caption">
+            {lightbox.label} (sample #{lightbox.sampleId}) — 원본 이미지 · 클릭하면 닫힘
           </div>
         </div>
       )}
