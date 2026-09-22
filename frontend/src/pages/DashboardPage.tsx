@@ -2,13 +2,18 @@ import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import {
-  Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis,
+  Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart,
+  ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts'
 import { api } from '../api/client'
 import type { AggRow } from '../api/types'
 import { VARIANT_TYPES } from '../api/types'
 
 const COLORS = ['#4353ff', '#ff8b3d']
+
+// 카테고리 도넛용 검증된 categorical 팔레트 (7색 + 기타는 회색)
+const PIE_COLORS = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#4a3aa7']
+const PIE_OTHER = '#9a9a94'
 
 function pct(v: number | null | undefined): string {
   return v == null ? '–' : `${(v * 100).toFixed(1)}%`
@@ -54,6 +59,11 @@ export default function DashboardPage() {
   const { data: byClass } = useQuery({
     queryKey: ['agg-class', effective],
     queryFn: () => api.aggregate({ run_ids: effective, group_by: ['run_id', 'class_label'] }),
+    enabled: effective.length > 0,
+  })
+  const { data: byCategory } = useQuery({
+    queryKey: ['agg-category', effective],
+    queryFn: () => api.aggregate({ run_ids: effective, group_by: ['run_id', 'category'] }),
     enabled: effective.length > 0,
   })
   const { data: matrix } = useQuery({
@@ -125,6 +135,30 @@ export default function DashboardPage() {
       get: (rid: number, c: string, v: string) => map.get(`${rid}|${c}|${v}`),
     }
   }, [matrix])
+
+  // run별 오답 카테고리 분포: 상위 7개 + 기타 (도넛)
+  const wrongPies = useMemo(() => {
+    if (!byCategory) return []
+    return effective.map((rid) => {
+      const rows = byCategory
+        .filter((r) => r.run_id === rid)
+        .map((r) => {
+          const ok = r.count - r.errors
+          const correct = Math.round(ok * (r.accuracy ?? 0))
+          return { category: r.category!, wrong: ok - correct }
+        })
+        .filter((r) => r.wrong > 0)
+        .sort((a, b) => b.wrong - a.wrong)
+      const top = rows.slice(0, 7)
+      const rest = rows.slice(7).reduce((s, r) => s + r.wrong, 0)
+      const data = [
+        ...top.map((r, i) => ({ name: r.category, value: r.wrong, fill: PIE_COLORS[i] })),
+        ...(rest > 0 ? [{ name: '기타', value: rest, fill: PIE_OTHER }] : []),
+      ]
+      const total = data.reduce((s, d) => s + d.value, 0)
+      return { rid, data, total }
+    })
+  }, [byCategory, effective])
 
   const single = runTotal(effective[0])
 
@@ -351,6 +385,75 @@ export default function DashboardPage() {
             </BarChart>
           </ResponsiveContainer>
         </div>
+      </div>
+
+      <div className="card">
+        <h3 style={{ marginTop: 0 }}>오답의 카테고리 분포</h3>
+        <p className="muted" style={{ marginTop: 0 }}>
+          틀린 예측들이 어떤 음식 카테고리에서 나왔는지 (오답 많은 상위 7개 + 기타).
+        </p>
+        <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
+          {wrongPies.map(({ rid, data, total }) => (
+            <div key={rid} style={{ flex: '1 1 420px', minWidth: 380 }}>
+              <strong style={{ fontSize: 13, color: isCompare ? COLORS[effective.indexOf(rid)] : undefined }}>
+                {isCompare ? (effective.indexOf(rid) === 0 ? 'A: ' : 'B: ') : ''}{runName(rid)}
+                <span className="muted"> — 오답 {total.toLocaleString()}건</span>
+              </strong>
+              {total === 0 ? (
+                <p className="muted">오답이 없습니다.</p>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <ResponsiveContainer width="55%" height={260}>
+                    <PieChart>
+                      <Pie
+                        data={data}
+                        dataKey="value"
+                        nameKey="name"
+                        innerRadius="45%"
+                        outerRadius="80%"
+                        stroke="#fff"
+                        strokeWidth={2}
+                        label={({ name, percent }) =>
+                          (percent ?? 0) >= 0.05 ? `${name} ${Math.round((percent ?? 0) * 100)}%` : ''
+                        }
+                        labelLine={false}
+                      >
+                        {data.map((d) => <Cell key={d.name} fill={d.fill} />)}
+                      </Pie>
+                      <Tooltip
+                        formatter={(v: number, name: string) =>
+                          [`${v.toLocaleString()}건 (${((v / total) * 100).toFixed(1)}%)`, name]
+                        }
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <table style={{ width: '45%', fontSize: 12 }}>
+                    <thead><tr><th>카테고리</th><th>오답</th><th>비율</th></tr></thead>
+                    <tbody>
+                      {data.map((d) => (
+                        <tr key={d.name}>
+                          <td>
+                            <span style={{
+                              display: 'inline-block', width: 10, height: 10,
+                              background: d.fill, borderRadius: 2, marginRight: 6,
+                            }} />
+                            {d.name}
+                          </td>
+                          <td>{d.value.toLocaleString()}</td>
+                          <td>{((d.value / total) * 100).toFixed(1)}%</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+        <p className="muted">
+          주의: 카테고리별 샘플 수가 다르므로(클래스 수 × 클래스당 N) 비율이 크다고 그 카테고리가
+          꼭 "더 어려운" 건 아닙니다 — 클래스별 정확도 차트와 함께 보세요.
+        </p>
       </div>
 
       <div className="card">
