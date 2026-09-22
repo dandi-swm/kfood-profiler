@@ -7,9 +7,9 @@
 - meta.json                  : 완료된 run 목록 + 생성 시각
 - predictions/{run_id}.json  : run별 전체 예측 (샘플/변형 메타 조인)
 - images/variants/{id}.jpg   : 오답/에러가 있는 샘플의 변형 썸네일 (최대 256px)
-- images/samples/{id}.jpg    : 위 샘플의 원본 미리보기 (최대 800px)
+- images/samples/{id}.jpg    : 내보낸 run에 등장하는 "모든" 샘플의 원본 미리보기 (최대 800px)
 
-이미지는 오답 탐색에 필요한 것만 포함해 용량을 수십 MB로 억제한다.
+변형 이미지가 없는(전부 정답인) 샘플은 프론트가 원본 미리보기로 폴백한다.
 """
 
 import json
@@ -115,12 +115,10 @@ def main() -> None:
             )
             print(f"run {r.id}: 예측 {len(items)}건 내보냄")
 
-        # 오답 샘플의 이미지: 변형 썸네일 + 원본 미리보기
-        print(f"오답/에러 샘플 {len(wrong_sample_ids)}개의 이미지 내보내는 중…")
-        source = get_dataset_source()
-        n_var = n_smp = 0
+        # 오답 샘플: 변형별 썸네일 (실제 변형 파일 기준)
+        print(f"오답/에러 샘플 {len(wrong_sample_ids)}개의 변형 썸네일 내보내는 중…")
+        n_var = 0
         for sid in sorted(wrong_sample_ids):
-            sample = db.get(Sample, sid)
             variants = db.scalars(select(Variant).where(Variant.sample_id == sid)).all()
             for v in variants:
                 dst = out / "images" / "variants" / f"{v.id}.jpg"
@@ -131,13 +129,31 @@ def main() -> None:
                     continue
                 save_thumb(src.read_bytes(), dst, max_side=256, quality=80)
                 n_var += 1
+
+        # 모든 샘플: 원본 미리보기 (정답 샘플의 폴백 + 라이트박스용)
+        all_sample_ids = {
+            sid
+            for (sid,) in db.execute(
+                select(Sample.id)
+                .join(Variant, Variant.sample_id == Sample.id)
+                .join(Prediction, Prediction.variant_id == Variant.id)
+                .where(Prediction.run_id.in_([r.id for r in runs]))
+                .distinct()
+            )
+        }
+        print(f"전체 샘플 {len(all_sample_ids)}개의 원본 미리보기 내보내는 중…")
+        source = get_dataset_source()
+        n_smp = 0
+        for sid in sorted(all_sample_ids):
             dst = out / "images" / "samples" / f"{sid}.jpg"
-            if not dst.exists():
-                try:
-                    save_thumb(source.read_bytes(sample.rel_path), dst, max_side=800, quality=85)
-                    n_smp += 1
-                except OSError:
-                    pass
+            if dst.exists():
+                continue
+            sample = db.get(Sample, sid)
+            try:
+                save_thumb(source.read_bytes(sample.rel_path), dst, max_side=800, quality=85)
+                n_smp += 1
+            except OSError:
+                pass
         print(f"변형 썸네일 {n_var}개, 원본 미리보기 {n_smp}개")
 
     total_mb = sum(f.stat().st_size for f in out.rglob("*") if f.is_file()) / 1e6

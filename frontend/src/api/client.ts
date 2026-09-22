@@ -121,6 +121,13 @@ export const IMG_FALLBACK =
 
 export function onImgError(e: React.SyntheticEvent<HTMLImageElement>): void {
   const img = e.currentTarget
+  // 1차 폴백: data-fallback(샘플 원본 미리보기) → 2차: 플레이스홀더
+  const fallback = img.dataset.fallback
+  if (fallback && img.src !== fallback && !img.src.startsWith('data:')) {
+    delete img.dataset.fallback
+    img.src = fallback
+    return
+  }
   if (img.src !== IMG_FALLBACK) img.src = IMG_FALLBACK
 }
 

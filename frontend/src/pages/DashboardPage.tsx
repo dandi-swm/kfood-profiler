@@ -632,6 +632,7 @@ export default function DashboardPage() {
                         src={variantImageUrl(anchor.variant_id)}
                         alt={anchor.class_label}
                         loading="lazy"
+                        data-fallback={sampleImageUrl(sid)}
                         onError={onImgError}
                         onClick={() => setLightbox({ sampleId: sid, label: anchor.class_label })}
                       />
@@ -694,6 +695,7 @@ export default function DashboardPage() {
                       src={variantImageUrl(p.variant_id)}
                       alt={p.class_label}
                       loading="lazy"
+                      data-fallback={sampleImageUrl(p.sample_id)}
                       onError={onImgError}
                       onClick={() => setLightbox({ sampleId: p.sample_id, label: p.class_label })}
                     />
