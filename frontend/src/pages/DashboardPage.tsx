@@ -412,22 +412,23 @@ export default function DashboardPage() {
         </h3>
         <div style={{ overflowX: 'auto' }}>
           <ResponsiveContainer width="100%" height={Math.max(260, classChart.length * (isCompare ? 30 : 16))}>
-            <BarChart data={classChart} layout="vertical" margin={{ left: 60 }}>
+            <BarChart
+              data={classChart}
+              layout="vertical"
+              margin={{ left: 60 }}
+              style={{ cursor: 'pointer' }}
+              onClick={(state) => {
+                const label = (state as { activeLabel?: string } | null)?.activeLabel
+                if (label) setDialogCell({ cls: label, vt: null })
+              }}
+            >
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis type="number" unit="%" domain={[0, 100]} />
               <YAxis type="category" dataKey="label" width={90} tick={{ fontSize: 11 }} />
               <Tooltip />
               {isCompare && <Legend />}
               {effective.map((rid, i) => (
-                <Bar
-                  key={rid}
-                  dataKey={runName(rid)}
-                  fill={COLORS[i % COLORS.length]}
-                  cursor="pointer"
-                  onClick={(data: { label?: string }) => {
-                    if (data?.label) setDialogCell({ cls: data.label, vt: null })
-                  }}
-                />
+                <Bar key={rid} dataKey={runName(rid)} fill={COLORS[i % COLORS.length]} />
               ))}
             </BarChart>
           </ResponsiveContainer>
