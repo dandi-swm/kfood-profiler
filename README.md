@@ -40,6 +40,10 @@ GEMINI_API_KEY=...
 
 비용 감각: 전체 기본 실행(2,860샘플 × 5변형 ≈ 14,300호출)은 Gemini Flash 기준 약 $5 내외 (스모크 실측: 호출당 ~$0.00035). 취소/이어서 실행(resume) 지원.
 
+## 문서
+
+시스템 전체 구조(DB 스키마, API, 핵심 로직, 함정 목록)는 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) 참고.
+
 ## 모델 추가
 
 `backend/app/models_registry.py`에 항목 추가 + (새 프로바이더라면) `backend/app/providers/`에 `VisionProvider` 구현.
