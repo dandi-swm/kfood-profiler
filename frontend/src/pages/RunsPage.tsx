@@ -93,9 +93,10 @@ export default function RunsPage() {
   const manifest = readyManifests.find((m) => m.id === manifestId)
   const model = models?.find((m) => m.model_id === modelId)
   const calls = (manifest?.sample_count ?? 0) * variants.size
-  // 대략적 사전 추정: 호출당 입력 ~1.8k 토큰(클래스 목록+이미지), 출력 ~10 토큰
+  // 대략적 사전 추정: 호출당 입력 ~1.8k 토큰(클래스 목록+이미지),
+  // 출력 ~100 토큰(답변 + 잔여 thinking 토큰; thinking은 budget 0으로 최소화됨)
   const estCost = model
-    ? calls * (1800 / 1e6 * model.usd_per_m_input + 10 / 1e6 * model.usd_per_m_output)
+    ? calls * (1800 / 1e6 * model.usd_per_m_input + 100 / 1e6 * model.usd_per_m_output)
     : 0
 
   const canLaunch = name && manifest && model && variants.size > 0

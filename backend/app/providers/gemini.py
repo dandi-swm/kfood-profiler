@@ -38,6 +38,9 @@ class GeminiProvider(VisionProvider):
                     response_mime_type="text/x.enum",
                     response_schema={"type": "STRING", "enum": class_list},
                     temperature=0.0,
+                    # 분류에는 thinking이 불필요한데 출력 단가로 과금됨 → 최소화
+                    # (모델에 따라 완전히 0이 되지 않고 소량 남을 수 있음)
+                    thinking_config=genai_types.ThinkingConfig(thinking_budget=0),
                 ),
             )
         except genai_errors.APIError as e:
@@ -47,10 +50,14 @@ class GeminiProvider(VisionProvider):
 
         latency_ms = int((time.monotonic() - started) * 1000)
         usage = response.usage_metadata
+        # thinking(thoughts) 토큰도 출력 단가로 과금되므로 output에 합산해야
+        # 비용 추정이 실제 청구액과 일치한다
+        candidates = getattr(usage, "candidates_token_count", None) or 0
+        thoughts = getattr(usage, "thoughts_token_count", None) or 0
         return PredictionResult(
             raw_text=(response.text or "").strip(),
             input_tokens=getattr(usage, "prompt_token_count", None),
-            output_tokens=getattr(usage, "candidates_token_count", None),
+            output_tokens=candidates + thoughts,
             latency_ms=latency_ms,
         )
 
