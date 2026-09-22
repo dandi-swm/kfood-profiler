@@ -93,3 +93,21 @@ button.danger { background: #e64; }
 
 details summary { cursor: pointer; color: #4353ff; font-size: 12px; }
 details pre { font-size: 11px; background: #f4f5fa; padding: 8px; border-radius: 6px; overflow-x: auto; }
+
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(20, 20, 40, 0.5);
+  display: flex; align-items: center; justify-content: center; z-index: 100;
+}
+.modal {
+  background: #fff; border-radius: 12px; padding: 20px 24px;
+  width: min(860px, 92vw); max-height: 85vh; overflow-y: auto;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.25);
+}
+.modal-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.modal-head h3 { margin: 0; }
+.modal-close {
+  background: #eef; color: #334; border-radius: 6px; padding: 4px 12px; font-size: 14px;
+}
+.pred-row { display: flex; gap: 14px; align-items: center; padding: 10px 0; border-bottom: 1px solid #eef; }
+.pred-row img { width: 130px; height: 96px; object-fit: cover; border-radius: 8px; flex-shrink: 0; }
+.pred-row .info { font-size: 13px; }

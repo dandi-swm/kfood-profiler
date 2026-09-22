@@ -5,8 +5,8 @@ import {
   Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart,
   ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts'
-import { api } from '../api/client'
-import type { AggRow } from '../api/types'
+import { api, variantImageUrl } from '../api/client'
+import type { AggRow, VariantType } from '../api/types'
 import { VARIANT_TYPES } from '../api/types'
 
 const COLORS = ['#4353ff', '#ff8b3d']
@@ -28,6 +28,7 @@ export default function DashboardPage() {
   )
   const [selectedRuns, setSelectedRuns] = useState<number[]>([])
   const [showAllMatrix, setShowAllMatrix] = useState(false)
+  const [dialogCell, setDialogCell] = useState<{ cls: string; vt: VariantType } | null>(null)
   const effective = selectedRuns.length ? selectedRuns : doneRuns.slice(0, 1).map((r) => r.id)
   const isCompare = effective.length === 2
 
@@ -173,6 +174,29 @@ export default function DashboardPage() {
       return { rid, data, total }
     })
   }, [byCategory, effective])
+
+  const { data: dialogPredsA } = useQuery({
+    queryKey: ['dialog-preds', effective[0], dialogCell],
+    queryFn: () =>
+      api.predictions({
+        run_id: effective[0],
+        class_label: dialogCell!.cls,
+        variant_type: dialogCell!.vt,
+        page_size: 200,
+      }),
+    enabled: dialogCell != null && effective.length > 0,
+  })
+  const { data: dialogPredsB } = useQuery({
+    queryKey: ['dialog-preds', effective[1], dialogCell],
+    queryFn: () =>
+      api.predictions({
+        run_id: effective[1],
+        class_label: dialogCell!.cls,
+        variant_type: dialogCell!.vt,
+        page_size: 200,
+      }),
+    enabled: dialogCell != null && isCompare,
+  })
 
   const single = runTotal(effective[0])
 
@@ -515,11 +539,7 @@ export default function DashboardPage() {
                         className="matrix-cell"
                         style={{ background: bg }}
                         title={isCompare ? 'A 기준 오답 드릴다운으로 이동' : '클릭하면 해당 셀의 오답들을 봅니다'}
-                        onClick={() =>
-                          navigate(
-                            `/predictions?run_id=${effective[0]}&class_label=${encodeURIComponent(c)}&variant_type=${v}&is_correct=false`,
-                          )
-                        }
+                        onClick={() => setDialogCell({ cls: c, vt: v })}
                       >
                         {isCompare ? `${pct(accA)} / ${pct(accB)}` : pct(accA)}
                       </td>
@@ -536,6 +556,78 @@ export default function DashboardPage() {
             : '배경이 진할수록 정확도가 낮은 셀입니다.'}
         </p>
       </div>
+
+      {dialogCell && (
+        <div className="modal-overlay" onClick={() => setDialogCell(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-head">
+              <h3>
+                {dialogCell.cls} × {dialogCell.vt}
+              </h3>
+              <button className="modal-close" onClick={() => setDialogCell(null)}>닫기 ✕</button>
+            </div>
+            {(() => {
+              const itemsA = dialogPredsA?.items ?? []
+              const bBySample = new Map(
+                (dialogPredsB?.items ?? []).map((p) => [p.sample_id, p]),
+              )
+              if (!itemsA.length) return <p className="muted">불러오는 중…</p>
+              // 오답(어느 한쪽이라도)을 위로
+              const sorted = [...itemsA].sort((x, y) => {
+                const xw = x.is_correct === false || bBySample.get(x.sample_id)?.is_correct === false ? 0 : 1
+                const yw = y.is_correct === false || bBySample.get(y.sample_id)?.is_correct === false ? 0 : 1
+                return xw - yw
+              })
+              const predBadge = (p?: { predicted_label: string | null; is_correct: boolean | null; status: string }) => {
+                if (!p) return <span className="muted">–</span>
+                if (p.status === 'error') return <span className="badge error">에러</span>
+                return (
+                  <>
+                    <strong>{p.predicted_label ?? '–'}</strong>{' '}
+                    <span className={`badge ${p.is_correct ? 'correct' : 'wrong'}`}>
+                      {p.is_correct ? '정답' : '오답'}
+                    </span>
+                  </>
+                )
+              }
+              return sorted.map((p) => {
+                const b = bBySample.get(p.sample_id)
+                return (
+                  <div className="pred-row" key={p.sample_id}>
+                    <img src={variantImageUrl(p.variant_id)} alt={p.class_label} loading="lazy" />
+                    <div className="info">
+                      <div>정답: <strong>{p.class_label}</strong> <span className="muted">(sample #{p.sample_id})</span></div>
+                      <div style={{ marginTop: 4 }}>
+                        {isCompare && <span style={{ color: COLORS[0], fontWeight: 700 }}>A </span>}
+                        예측: {predBadge(p)}
+                      </div>
+                      {isCompare && (
+                        <div style={{ marginTop: 4 }}>
+                          <span style={{ color: COLORS[1], fontWeight: 700 }}>B </span>
+                          예측: {predBadge(b)}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )
+              })
+            })()}
+            <div style={{ marginTop: 12 }}>
+              <button
+                className="secondary"
+                onClick={() => {
+                  setDialogCell(null)
+                  navigate(
+                    `/predictions?run_id=${effective[0]}&class_label=${encodeURIComponent(dialogCell.cls)}&variant_type=${dialogCell.vt}`,
+                  )
+                }}
+              >
+                드릴다운 페이지에서 자세히 보기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
