@@ -566,6 +566,17 @@ export default function DashboardPage() {
               </h3>
               <button className="modal-close" onClick={() => setDialogCell(null)}>닫기 ✕</button>
             </div>
+            <p className="muted" style={{ marginTop: 0 }}>
+              {isCompare ? (
+                <>
+                  <span style={{ color: COLORS[0], fontWeight: 700 }}>A</span> = {runName(effective[0])}
+                  {' · '}
+                  <span style={{ color: COLORS[1], fontWeight: 700 }}>B</span> = {runName(effective[1])}
+                </>
+              ) : (
+                <>{runName(effective[0])}</>
+              )}
+            </p>
             {(() => {
               const itemsA = dialogPredsA?.items ?? []
               const bBySample = new Map(
