@@ -9,10 +9,11 @@ from .base import PredictionResult, ProviderError, RateLimitError, VisionProvide
 
 
 class GeminiProvider(VisionProvider):
-    def __init__(self, model: str):
+    def __init__(self, model: str, thinking: bool = False):
         if not settings.gemini_api_key:
             raise ProviderError("GEMINI_API_KEY가 설정되지 않았습니다 (.env 확인)")
         self.model = model
+        self.thinking = thinking
         self.client = genai.Client(api_key=settings.gemini_api_key)
 
     async def classify(
@@ -38,9 +39,13 @@ class GeminiProvider(VisionProvider):
                     response_mime_type="text/x.enum",
                     response_schema={"type": "STRING", "enum": class_list},
                     temperature=0.0,
-                    # 분류에는 thinking이 불필요한데 출력 단가로 과금됨 → 최소화
-                    # (모델에 따라 완전히 0이 되지 않고 소량 남을 수 있음)
-                    thinking_config=genai_types.ThinkingConfig(thinking_budget=0),
+                    # thinking off 모델: budget 0으로 억제 (출력 단가로 과금되므로).
+                    # thinking on 모델: None → 모델 기본(동적 thinking) 사용.
+                    thinking_config=(
+                        None
+                        if self.thinking
+                        else genai_types.ThinkingConfig(thinking_budget=0)
+                    ),
                 ),
             )
         except genai_errors.APIError as e:

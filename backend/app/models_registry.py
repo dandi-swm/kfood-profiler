@@ -15,6 +15,7 @@ class ModelInfo:
     display_name: str
     usd_per_m_input: float
     usd_per_m_output: float
+    thinking: bool = False  # Gemini thinking 활성 여부 (기본 off: 비용/지연 절감)
 
 
 MODEL_CATALOG: dict[str, ModelInfo] = {
@@ -29,12 +30,30 @@ MODEL_CATALOG: dict[str, ModelInfo] = {
             usd_per_m_output=2.50,
         ),
         ModelInfo(
+            model_id="gemini-3.8-flash-thinking",
+            provider="gemini",
+            provider_model="gemini-3.8-flash",
+            display_name="Gemini 3.8 Flash (thinking)",
+            usd_per_m_input=0.30,
+            usd_per_m_output=2.50,
+            thinking=True,
+        ),
+        ModelInfo(
             model_id="gemini-3.5-flash-lite",
             provider="gemini",
             provider_model="gemini-3.5-flash-lite",
             display_name="Gemini 3.5 Flash Lite",
             usd_per_m_input=0.10,
             usd_per_m_output=0.40,
+        ),
+        ModelInfo(
+            model_id="gemini-3.5-flash-lite-thinking",
+            provider="gemini",
+            provider_model="gemini-3.5-flash-lite",
+            display_name="Gemini 3.5 Flash Lite (thinking)",
+            usd_per_m_input=0.10,
+            usd_per_m_output=0.40,
+            thinking=True,
         ),
         ModelInfo(
             model_id="mock-80",
