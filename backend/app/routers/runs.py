@@ -35,11 +35,14 @@ async def create_run(body: RunCreate, db: Session = Depends(get_session)):
     )
     class_list = get_class_list(db, body.manifest_id)
 
+    from ..config import settings
+
     run = Run(
         name=body.name,
         manifest_id=body.manifest_id,
         model_id=body.model_id,
         provider=info.provider,
+        api_path="vertex" if (info.provider == "gemini" and settings.use_vertexai) else "api-key",
         prompt_version="v1",
         prompt_text=build_prompt(class_list),
         variant_types=body.variant_types,

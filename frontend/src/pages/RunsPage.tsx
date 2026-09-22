@@ -35,7 +35,12 @@ function RunRow({ run }: { run: Run }) {
     <tr>
       <td>{run.id}</td>
       <td>{run.name}</td>
-      <td>{run.model_id}</td>
+      <td>
+        {run.model_id}
+        {run.provider === 'gemini' && (
+          <div className="muted">{run.api_path === 'vertex' ? 'Vertex (크레딧)' : 'API 키'}</div>
+        )}
+      </td>
       <td className="muted">{run.variant_types.join(', ')}</td>
       <td style={{ minWidth: 180 }}>
         <ProgressBar value={done} total={run.total_items} />

@@ -58,6 +58,7 @@ class RunOut(BaseModel):
     manifest_id: int
     model_id: str
     provider: str
+    api_path: str = "api-key"
     prompt_version: str
     variant_types: list[str]
     concurrency: int

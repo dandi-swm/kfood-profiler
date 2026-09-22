@@ -27,7 +27,9 @@ export default function DashboardPage() {
 
   const runName = (id: number) => {
     const r = runs?.find((x) => x.id === id)
-    return r ? `#${r.id} ${r.name} (${r.model_id})` : `#${id}`
+    return r
+      ? `#${r.id} ${r.name} (${r.model_id}${r.provider === 'gemini' ? `, ${r.api_path}` : ''})`
+      : `#${id}`
   }
 
   const toggleRun = (id: number, checked: boolean) => {

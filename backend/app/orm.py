@@ -80,6 +80,9 @@ class Run(Base):
     manifest_id: Mapped[int] = mapped_column(ForeignKey("sample_manifests.id"))
     model_id: Mapped[str] = mapped_column(String)
     provider: Mapped[str] = mapped_column(String)
+    # 호출 경로: 'api-key'(AI Studio) | 'vertex' — 경로별 이미지 토큰화가 달라
+    # 같은 모델이어도 호출당 비용이 다르므로 비교 시 구분 필요
+    api_path: Mapped[str] = mapped_column(String, default="api-key")
     prompt_version: Mapped[str] = mapped_column(String, default="v1")
     prompt_text: Mapped[str] = mapped_column(Text)
     variant_types: Mapped[list] = mapped_column(JSON)

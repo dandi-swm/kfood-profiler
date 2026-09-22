@@ -36,6 +36,7 @@ export interface Run {
   manifest_id: number
   model_id: string
   provider: string
+  api_path: string
   prompt_version: string
   variant_types: VariantType[]
   concurrency: number
