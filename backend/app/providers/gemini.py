@@ -10,14 +10,26 @@ from .base import PredictionResult, ProviderError, RateLimitError, VisionProvide
 
 class GeminiProvider(VisionProvider):
     def __init__(self, model: str, thinking: bool = False):
-        if not settings.gemini_api_key:
-            raise ProviderError("GEMINI_API_KEY가 설정되지 않았습니다 (.env 확인)")
         self.model = model
         self.thinking = thinking
         # 일부 모델(예: 3.5-flash-lite)은 thinking_budget=0을 400으로 거부하고
         # 기본값이 이미 thinking off다. 첫 400에서 감지해 config 생략으로 폴백.
         self._budget_zero_unsupported = False
-        self.client = genai.Client(api_key=settings.gemini_api_key)
+        if settings.use_vertexai:
+            # ADC 기반 Vertex AI 경로 (GCP 무료 크레딧 적용)
+            if not settings.google_cloud_project:
+                raise ProviderError(
+                    "USE_VERTEXAI=true인데 GOOGLE_CLOUD_PROJECT가 없습니다 (.env 확인)"
+                )
+            self.client = genai.Client(
+                vertexai=True,
+                project=settings.google_cloud_project,
+                location=settings.google_cloud_location,
+            )
+        else:
+            if not settings.gemini_api_key:
+                raise ProviderError("GEMINI_API_KEY가 설정되지 않았습니다 (.env 확인)")
+            self.client = genai.Client(api_key=settings.gemini_api_key)
 
     def _thinking_config(self) -> "genai_types.ThinkingConfig | None":
         if self.thinking:
