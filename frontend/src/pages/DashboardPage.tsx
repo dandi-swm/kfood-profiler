@@ -28,7 +28,7 @@ export default function DashboardPage() {
   )
   const [selectedRuns, setSelectedRuns] = useState<number[]>([])
   const [showAllMatrix, setShowAllMatrix] = useState(false)
-  const [dialogCell, setDialogCell] = useState<{ cls: string; vt: VariantType } | null>(null)
+  const [dialogCell, setDialogCell] = useState<{ cls: string; vt: VariantType | null } | null>(null)
   const effective = selectedRuns.length ? selectedRuns : doneRuns.slice(0, 1).map((r) => r.id)
   const isCompare = effective.length === 2
 
@@ -181,7 +181,7 @@ export default function DashboardPage() {
       api.predictions({
         run_id: effective[0],
         class_label: dialogCell!.cls,
-        variant_type: dialogCell!.vt,
+        variant_type: dialogCell!.vt ?? undefined,
         page_size: 200,
       }),
     enabled: dialogCell != null && effective.length > 0,
@@ -192,7 +192,7 @@ export default function DashboardPage() {
       api.predictions({
         run_id: effective[1],
         class_label: dialogCell!.cls,
-        variant_type: dialogCell!.vt,
+        variant_type: dialogCell!.vt ?? undefined,
         page_size: 200,
       }),
     enabled: dialogCell != null && isCompare,
@@ -418,11 +418,20 @@ export default function DashboardPage() {
               <Tooltip />
               {isCompare && <Legend />}
               {effective.map((rid, i) => (
-                <Bar key={rid} dataKey={runName(rid)} fill={COLORS[i % COLORS.length]} />
+                <Bar
+                  key={rid}
+                  dataKey={runName(rid)}
+                  fill={COLORS[i % COLORS.length]}
+                  cursor="pointer"
+                  onClick={(data: { label?: string }) => {
+                    if (data?.label) setDialogCell({ cls: data.label, vt: null })
+                  }}
+                />
               ))}
             </BarChart>
           </ResponsiveContainer>
         </div>
+        <p className="muted">막대를 클릭하면 그 음식의 변형별 예측 결과를 볼 수 있습니다.</p>
       </div>
 
       <div className="card">
@@ -569,7 +578,7 @@ export default function DashboardPage() {
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-head">
               <h3>
-                {dialogCell.cls} × {dialogCell.vt}
+                {dialogCell.cls} × {dialogCell.vt ?? '전체 변형'}
               </h3>
               <button className="modal-close" onClick={() => setDialogCell(null)}>닫기 ✕</button>
             </div>
@@ -586,10 +595,71 @@ export default function DashboardPage() {
             </p>
             {(() => {
               const itemsA = dialogPredsA?.items ?? []
-              const bBySample = new Map(
-                (dialogPredsB?.items ?? []).map((p) => [p.sample_id, p]),
-              )
+              const itemsB = dialogPredsB?.items ?? []
               if (!itemsA.length) return <p className="muted">불러오는 중…</p>
+
+              const predBadgeAll = (p?: { predicted_label: string | null; is_correct: boolean | null; status: string }) => {
+                if (!p) return <span className="muted">–</span>
+                if (p.status === 'error') return <span className="badge error">에러</span>
+                return (
+                  <>
+                    {p.predicted_label ?? '–'}{' '}
+                    <span className={`badge ${p.is_correct ? 'correct' : 'wrong'}`}>
+                      {p.is_correct ? '○' : '✕'}
+                    </span>
+                  </>
+                )
+              }
+
+              if (dialogCell.vt == null) {
+                // 클래스 전체: 샘플별 행 × 변형별 열
+                const sampleIds = [...new Set(itemsA.map((p) => p.sample_id))]
+                const find = (items: typeof itemsA, sid: number, vt: string) =>
+                  items.find((p) => p.sample_id === sid && p.variant_type === vt)
+                // 오답이 있는 샘플을 위로
+                sampleIds.sort((x, y) => {
+                  const wrong = (sid: number) =>
+                    [...itemsA, ...itemsB].some((p) => p.sample_id === sid && p.is_correct === false) ? 0 : 1
+                  return wrong(x) - wrong(y)
+                })
+                return sampleIds.map((sid) => {
+                  const anchor = find(itemsA, sid, 'original') ?? itemsA.find((p) => p.sample_id === sid)!
+                  return (
+                    <div className="pred-row" key={sid} style={{ alignItems: 'flex-start' }}>
+                      <img src={variantImageUrl(anchor.variant_id)} alt={anchor.class_label} loading="lazy" />
+                      <div className="info" style={{ flex: 1 }}>
+                        <div>정답: <strong>{anchor.class_label}</strong> <span className="muted">(sample #{sid})</span></div>
+                        <table style={{ marginTop: 6 }}>
+                          <thead>
+                            <tr>
+                              {isCompare && <th></th>}
+                              {VARIANT_TYPES.map((vt) => <th key={vt}>{vt}</th>)}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <tr>
+                              {isCompare && <td style={{ color: COLORS[0], fontWeight: 700 }}>A</td>}
+                              {VARIANT_TYPES.map((vt) => (
+                                <td key={vt}>{predBadgeAll(find(itemsA, sid, vt))}</td>
+                              ))}
+                            </tr>
+                            {isCompare && (
+                              <tr>
+                                <td style={{ color: COLORS[1], fontWeight: 700 }}>B</td>
+                                {VARIANT_TYPES.map((vt) => (
+                                  <td key={vt}>{predBadgeAll(find(itemsB, sid, vt))}</td>
+                                ))}
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )
+                })
+              }
+
+              const bBySample = new Map(itemsB.map((p) => [p.sample_id, p]))
               // 오답(어느 한쪽이라도)을 위로
               const sorted = [...itemsA].sort((x, y) => {
                 const xw = x.is_correct === false || bBySample.get(x.sample_id)?.is_correct === false ? 0 : 1
@@ -636,7 +706,7 @@ export default function DashboardPage() {
                 onClick={() => {
                   setDialogCell(null)
                   navigate(
-                    `/predictions?run_id=${effective[0]}&class_label=${encodeURIComponent(dialogCell.cls)}&variant_type=${dialogCell.vt}`,
+                    `/predictions?run_id=${effective[0]}&class_label=${encodeURIComponent(dialogCell.cls)}${dialogCell.vt ? `&variant_type=${dialogCell.vt}` : ''}`,
                   )
                 }}
               >
