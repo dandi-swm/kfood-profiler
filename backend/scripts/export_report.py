@@ -155,6 +155,8 @@ def main() -> None:
             except OSError:
                 pass
         print(f"변형 썸네일 {n_var}개, 원본 미리보기 {n_smp}개")
+        # 프론트가 이미지 포함 여부를 요청 1번으로 판별하는 센티널
+        (out / "images" / "available.flag").write_text("ok")
 
     total_mb = sum(f.stat().st_size for f in out.rglob("*") if f.is_file()) / 1e6
     print(f"완료: {out} (총 {total_mb:.1f}MB)")

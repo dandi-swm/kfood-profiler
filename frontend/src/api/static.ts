@@ -14,7 +14,12 @@ import type {
   VariantType,
 } from './types'
 
+import { IMG_FALLBACK } from './placeholder'
+
 const BASE = `${import.meta.env.BASE_URL}report-data/`
+
+// 이미지 디렉토리 포함 여부 (배포본은 라이선스상 이미지 제외 → 요청 없이 즉시 플레이스홀더)
+let imagesAvailable = false
 
 interface Meta {
   generated_at: string
@@ -23,10 +28,15 @@ interface Meta {
 
 let metaPromise: Promise<Meta> | null = null
 function loadMeta(): Promise<Meta> {
-  metaPromise ??= fetch(`${BASE}meta.json`).then((r) => {
-    if (!r.ok) throw new Error(`meta.json 로드 실패 (${r.status})`)
-    return r.json()
-  })
+  metaPromise ??= (async () => {
+    const [metaRes, imgOk] = await Promise.all([
+      fetch(`${BASE}meta.json`),
+      fetch(`${BASE}images/available.flag`).then((r) => r.ok).catch(() => false),
+    ])
+    if (!metaRes.ok) throw new Error(`meta.json 로드 실패 (${metaRes.status})`)
+    imagesAvailable = imgOk
+    return metaRes.json()
+  })()
   return metaPromise
 }
 
@@ -182,11 +192,11 @@ export const staticApi = {
 }
 
 export function staticVariantImageUrl(variantId: number): string {
-  return `${BASE}images/variants/${variantId}.jpg`
+  return imagesAvailable ? `${BASE}images/variants/${variantId}.jpg` : IMG_FALLBACK
 }
 
 export function staticSampleImageUrl(sampleId: number): string {
-  return `${BASE}images/samples/${sampleId}.jpg`
+  return imagesAvailable ? `${BASE}images/samples/${sampleId}.jpg` : IMG_FALLBACK
 }
 
 export type { VariantType }
