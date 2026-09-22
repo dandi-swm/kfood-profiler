@@ -424,7 +424,7 @@ export default function DashboardPage() {
             >
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis type="number" unit="%" domain={[0, 100]} />
-              <YAxis type="category" dataKey="label" width={90} tick={{ fontSize: 11 }} />
+              <YAxis type="category" dataKey="label" width={90} tick={{ fontSize: 11 }} interval={0} />
               <Tooltip />
               {isCompare && <Legend />}
               {effective.map((rid, i) => (
