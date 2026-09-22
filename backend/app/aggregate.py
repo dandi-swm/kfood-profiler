@@ -2,10 +2,11 @@
 
 from sqlalchemy import Float, cast, func, select
 
-from .orm import Prediction, Sample, Variant
+from .orm import Prediction, Run, Sample, Variant
 
 DIMENSIONS = {
     "run_id": Prediction.run_id,
+    "model_id": Run.model_id,
     "class_label": Sample.class_label,
     "category": Sample.category,
     "variant_type": Variant.variant_type,
@@ -35,6 +36,7 @@ def aggregate(
         )
         .join(Variant, Prediction.variant_id == Variant.id)
         .join(Sample, Variant.sample_id == Sample.id)
+        .join(Run, Prediction.run_id == Run.id)
         .where(Prediction.run_id.in_(run_ids))
     )
     if class_label:

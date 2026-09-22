@@ -59,6 +59,7 @@ export interface Progress {
 
 export interface AggRow {
   run_id?: number
+  model_id?: string
   class_label?: string
   category?: string
   variant_type?: VariantType

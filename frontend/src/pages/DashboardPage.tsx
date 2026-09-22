@@ -44,6 +44,11 @@ export default function DashboardPage() {
     queryFn: () => api.aggregate({ run_ids: effective, group_by: ['class_label', 'variant_type'] }),
     enabled: effective.length > 0,
   })
+  const { data: byModel } = useQuery({
+    queryKey: ['agg-model', effective],
+    queryFn: () => api.aggregate({ run_ids: effective, group_by: ['model_id'] }),
+    enabled: effective.length > 0,
+  })
   const { data: totals } = useQuery({
     queryKey: ['agg-total', effective],
     queryFn: () => api.aggregate({ run_ids: effective, group_by: [] }),
@@ -126,6 +131,34 @@ export default function DashboardPage() {
           <div className="tile"><div className="v">{total.errors}</div><div className="k">에러</div></div>
           <div className="tile"><div className="v">{total.avg_latency_ms ? `${Math.round(total.avg_latency_ms)}ms` : '–'}</div><div className="k">평균 지연</div></div>
           <div className="tile"><div className="v">${total.cost_usd.toFixed(3)}</div><div className="k">비용</div></div>
+        </div>
+      )}
+
+      {byModel && byModel.length > 0 && (
+        <div className="card">
+          <h3 style={{ marginTop: 0 }}>모델별 요약 (선택 run 합산)</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>모델</th><th>호출 수</th><th>정확도</th><th>평균 처리시간</th>
+                <th>입력 토큰</th><th>출력 토큰</th><th>비용</th><th>호출당 비용</th>
+              </tr>
+            </thead>
+            <tbody>
+              {byModel.map((m) => (
+                <tr key={m.model_id}>
+                  <td>{m.model_id}</td>
+                  <td>{m.count.toLocaleString()}</td>
+                  <td>{pct(m.accuracy)}</td>
+                  <td>{m.avg_latency_ms != null ? `${Math.round(m.avg_latency_ms)}ms` : '–'}</td>
+                  <td>{m.input_tokens.toLocaleString()}</td>
+                  <td>{m.output_tokens.toLocaleString()}</td>
+                  <td><strong>${m.cost_usd.toFixed(3)}</strong></td>
+                  <td>${m.count ? (m.cost_usd / m.count).toFixed(5) : '–'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 
