@@ -20,6 +20,10 @@ function RunRow({ run }: { run: Run }) {
     mutationFn: () => api.resumeRun(run.id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['runs'] }),
   })
+  const remove = useMutation({
+    mutationFn: () => api.deleteRun(run.id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['runs'] }),
+  })
 
   const status = progress?.status ?? run.status
   const done = progress?.done ?? 0
@@ -58,6 +62,18 @@ function RunRow({ run }: { run: Run }) {
         )}
         {resumable && (
           <button className="secondary" onClick={() => resume.mutate()}>이어서 실행</button>
+        )}
+        {!active && (
+          <button
+            className="danger"
+            style={{ marginLeft: 6 }}
+            onClick={() => {
+              if (window.confirm(`run #${run.id} "${run.name}"과 예측 결과를 모두 삭제할까요?`))
+                remove.mutate()
+            }}
+          >
+            삭제
+          </button>
         )}
       </td>
     </tr>

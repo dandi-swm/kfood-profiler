@@ -85,6 +85,24 @@ def progress(run_id: int, db: Session = Depends(get_session)):
     return get_progress(db, run_id)
 
 
+@router.delete("/{run_id}")
+def delete_run(run_id: int, db: Session = Depends(get_session)):
+    from ..orm import Prediction
+    from ..runner import is_run_active
+
+    run = db.get(Run, run_id)
+    if run is None:
+        raise HTTPException(404, "run 없음")
+    if run.status in ("running", "pending") or is_run_active(run_id):
+        raise HTTPException(409, "실행 중인 run은 먼저 취소한 뒤 삭제하세요")
+    db.query(Prediction).filter(Prediction.run_id == run_id).delete(
+        synchronize_session=False
+    )
+    db.delete(run)
+    db.commit()
+    return {"deleted": run_id}
+
+
 @router.post("/{run_id}/resume", response_model=RunOut)
 async def resume(run_id: int, db: Session = Depends(get_session)):
     """failed/cancelled run을 이어서 실행 (성공한 항목은 스킵, 에러 항목은 재시도)."""

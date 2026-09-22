@@ -53,6 +53,8 @@ export const api = {
     concurrency: number
   }) => request<Run>('/api/runs', { method: 'POST', body: JSON.stringify(body) }),
   cancelRun: (id: number) => request(`/api/runs/${id}/cancel`, { method: 'POST' }),
+  deleteRun: (id: number) =>
+    request<{ deleted: number }>(`/api/runs/${id}`, { method: 'DELETE' }),
   resumeRun: (id: number) => request<Run>(`/api/runs/${id}/resume`, { method: 'POST' }),
   progress: (id: number) => request<Progress>(`/api/runs/${id}/progress`),
 
