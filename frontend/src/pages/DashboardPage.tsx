@@ -494,6 +494,13 @@ export default function DashboardPage() {
         <h3 style={{ marginTop: 0 }}>
           클래스 × 변형 매트릭스 {isCompare && <span className="muted">— 셀: A / B</span>} (셀 클릭 → 오답 드릴다운)
         </h3>
+        {isCompare && (
+          <p className="muted" style={{ marginTop: 0 }}>
+            <span style={{ color: COLORS[0], fontWeight: 700 }}>A</span> = {runName(effective[0])}
+            {' · '}
+            <span style={{ color: COLORS[1], fontWeight: 700 }}>B</span> = {runName(effective[1])}
+          </p>
+        )}
         <p className="muted" style={{ marginTop: 0 }}>
           기본으로 오답/에러가 있는 클래스만 표시됩니다 ({matrixClasses.length}/{matrixData.classes.length}개).{' '}
           <label style={{ display: 'inline' }}>
