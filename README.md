@@ -48,18 +48,23 @@ API 없이 **결과 조회만** 가능한 정적 리포트를 만들 수 있다 
 # 1) DB에서 리포트 데이터 내보내기 (완료된 run + 오답 샘플 이미지)
 cd backend && .venv/bin/python scripts/export_report.py
 
-# 2) 정적 모드로 빌드 → docs/report/
+# 2) 정적 모드로 빌드 → docs/report/ (이미지는 제외하고 복사!)
 cd ../frontend
 VITE_STATIC=1 npx vite build --base=./ --outDir=../docs/report --emptyOutDir
-cp -r ../report-data ../docs/report/report-data
+rsync -a --exclude images ../report-data/ ../docs/report/report-data/
 ```
+
+**주의(라이선스)**: kfood는 AI Hub 데이터셋으로, 승인 없는 제3자 열람 제공이
+금지된다. **공개 배포본에는 이미지(`report-data/images/`)를 절대 포함하지 말 것**
+— 사이트는 집계/예측 라벨만 표시하고 사진 자리는 안내 플레이스홀더가 뜬다.
+이미지 포함 풀버전은 로컬에서만: `cd docs && python3 -m http.server` 후
+`report-data`를 images 포함으로 복사해 열람.
 
 GitHub 저장소 Settings → Pages → Source를 **main 브랜치 `/docs`**로 설정하면
 `https://<org>.github.io/<repo>/report/` 에서 서비스된다.
 새 run을 추가한 뒤에는 1~2번을 다시 실행해 커밋하면 갱신된다.
 
-- 데이터: run 메타 + 전체 예측 JSON, 오답/에러 샘플의 이미지 썸네일만 포함 (~30MB)
-- 정답 샘플 이미지는 용량 문제로 미포함 → 플레이스홀더 표시
+- 데이터: run 메타 + 전체 예측 JSON (~4MB). 데이터셋 이미지는 라이선스상 미포함
 
 ## 문서
 
