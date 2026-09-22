@@ -33,7 +33,7 @@ export default function DashboardPage() {
   const runName = (id: number) => {
     const r = runs?.find((x) => x.id === id)
     return r
-      ? `#${r.id} ${r.name} (${r.model_id}${r.provider === 'gemini' ? `, ${r.api_path}` : ''})`
+      ? `#${r.id} ${r.name} (${r.model_id}${r.provider === 'gemini' && r.api_path ? `, ${r.api_path}` : ''})`
       : `#${id}`
   }
 
@@ -413,10 +413,6 @@ export default function DashboardPage() {
                         outerRadius="80%"
                         stroke="#fff"
                         strokeWidth={2}
-                        label={({ name, percent }) =>
-                          (percent ?? 0) >= 0.05 ? `${name} ${Math.round((percent ?? 0) * 100)}%` : ''
-                        }
-                        labelLine={false}
                       >
                         {data.map((d) => <Cell key={d.name} fill={d.fill} />)}
                       </Pie>
