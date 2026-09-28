@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api/client'
-import { VARIANT_TYPES, type Run, type VariantType } from '../api/types'
+import {
+  MEDIA_RES_IMAGE_TOKENS, VARIANT_TYPES, type MediaResolution, type Run, type VariantType,
+} from '../api/types'
 import ProgressBar from '../components/ProgressBar'
 
 function RunRow({ run }: { run: Run }) {
@@ -38,13 +40,16 @@ function RunRow({ run }: { run: Run }) {
       <td>
         {run.model_id}
         {run.provider === 'gemini' && (
-          <div className="muted">{run.api_path === 'vertex' ? 'Vertex (크레딧)' : 'API 키'}</div>
+          <div className="muted">
+            {run.api_path === 'vertex' ? 'Vertex (크레딧)' : 'API 키'} · 해상도{' '}
+            {run.media_resolution ? run.media_resolution.toUpperCase() : '기본'}
+          </div>
         )}
       </td>
       <td className="muted">{run.variant_types.join(', ')}</td>
       <td style={{ minWidth: 180 }}>
         <ProgressBar value={done} total={run.total_items} />
-        <span className="muted">
+        <span className="progress-meta">
           {done.toLocaleString()}/{run.total_items.toLocaleString()} ({pct}%)
           {progress && progress.errors > 0 && (
             <span className="error-text"> 에러 {progress.errors}</span>
@@ -63,14 +68,14 @@ function RunRow({ run }: { run: Run }) {
       </td>
       <td>
         {active && (
-          <button className="danger" onClick={() => cancel.mutate()}>취소</button>
+          <button className="danger tiny" onClick={() => cancel.mutate()}>취소</button>
         )}
         {resumable && (
-          <button className="secondary" onClick={() => resume.mutate()}>이어서 실행</button>
+          <button className="secondary tiny" onClick={() => resume.mutate()}>이어서 실행</button>
         )}
         {!active && (
           <button
-            className="danger"
+            className="danger tiny"
             style={{ marginLeft: 6 }}
             onClick={() => {
               if (window.confirm(`run #${run.id} "${run.name}"과 예측 결과를 모두 삭제할까요?`))
@@ -102,6 +107,7 @@ export default function RunsPage() {
   const [modelId, setModelId] = useState('')
   const [variants, setVariants] = useState<Set<VariantType>>(new Set(VARIANT_TYPES))
   const [concurrency, setConcurrency] = useState(4)
+  const [mediaRes, setMediaRes] = useState<MediaResolution | ''>('')
 
   const create = useMutation({
     mutationFn: api.createRun,
@@ -114,11 +120,13 @@ export default function RunsPage() {
   const manifest = readyManifests.find((m) => m.id === manifestId)
   const model = models?.find((m) => m.model_id === modelId)
   const calls = (manifest?.sample_count ?? 0) * variants.size
-  // 대략적 사전 추정 (실측 기반): 호출당 입력 ~1.8k 토큰(클래스 목록+이미지),
-  // 출력은 thinking off ~10토큰, thinking on ~400토큰(답변+thinking)
+  const resApplies = !!model?.supports_media_resolution && mediaRes !== ''
+  // 대략적 사전 추정 (실측 기반): 호출당 입력 = 텍스트 ~1,325토큰(프롬프트+enum 스키마)
+  // + 이미지(media_resolution 고정값, 미지정=high 1,120). 출력은 thinking off ~10, on ~400
+  const inTokens = 1325 + MEDIA_RES_IMAGE_TOKENS[resApplies ? (mediaRes as MediaResolution) : 'high']
   const outTokens = model?.thinking ? 400 : 10
   const estCost = model
-    ? calls * (1800 / 1e6 * model.usd_per_m_input + outTokens / 1e6 * model.usd_per_m_output)
+    ? calls * (inTokens / 1e6 * model.usd_per_m_input + outTokens / 1e6 * model.usd_per_m_output)
     : 0
 
   const canLaunch = name && manifest && model && variants.size > 0
@@ -130,9 +138,15 @@ export default function RunsPage() {
 
   return (
     <div>
-      <h2>테스트 실행</h2>
+      <header className="page-head">
+        <h1>테스트 실행</h1>
+        <p className="page-sub">
+          샘플셋 × 모델 × 변형을 골라 closed-set 분류를 돌립니다. 5개 변형이 모두 같은 사진에서
+          나오므로, 변형 간 정확도 차이가 곧 해상도·압축의 순수 효과입니다.
+        </p>
+      </header>
       <div className="card">
-        <h3 style={{ marginTop: 0 }}>새 Run</h3>
+        <h3>새 Run</h3>
         <div className="form-row">
           <div>
             <label>이름</label>
@@ -155,6 +169,22 @@ export default function RunsPage() {
               <option value="">선택…</option>
               {models?.map((m) => (
                 <option key={m.model_id} value={m.model_id}>{m.display_name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label>이미지 해상도 (media_resolution)</label>
+            <select
+              value={model?.supports_media_resolution ? mediaRes : ''}
+              disabled={!model?.supports_media_resolution}
+              title={model && !model.supports_media_resolution ? '이 모델은 지원하지 않습니다' : undefined}
+              onChange={(e) => setMediaRes(e.target.value as MediaResolution | '')}
+            >
+              <option value="">{model && !model.supports_media_resolution ? '미지원 모델' : '기본 (= HIGH)'}</option>
+              {(Object.keys(MEDIA_RES_IMAGE_TOKENS) as MediaResolution[]).map((r) => (
+                <option key={r} value={r}>
+                  {r.toUpperCase()} — 이미지 {MEDIA_RES_IMAGE_TOKENS[r].toLocaleString()}토큰
+                </option>
               ))}
             </select>
           </div>
@@ -190,6 +220,7 @@ export default function RunsPage() {
                 model_id: modelId,
                 variant_types: [...variants],
                 concurrency,
+                media_resolution: resApplies ? (mediaRes as MediaResolution) : null,
               })
             }
           >
@@ -201,7 +232,8 @@ export default function RunsPage() {
       </div>
 
       <div className="card">
-        <h3 style={{ marginTop: 0 }}>Run 목록</h3>
+        <h3>Run 목록</h3>
+        <div className="scroll-y" style={{ maxHeight: 480 }}>
         <table>
           <thead>
             <tr>
@@ -216,6 +248,7 @@ export default function RunsPage() {
             )}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   )

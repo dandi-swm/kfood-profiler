@@ -21,6 +21,8 @@ async def create_run(body: RunCreate, db: Session = Depends(get_session)):
     info = MODEL_CATALOG.get(body.model_id)
     if info is None:
         raise HTTPException(400, f"알 수 없는 모델: {body.model_id}")
+    if body.media_resolution and not info.supports_media_resolution:
+        raise HTTPException(400, f"{body.model_id}는 media_resolution을 지원하지 않습니다")
     missing = set(body.variant_types) - set(manifest.variant_types)
     if missing:
         raise HTTPException(400, f"manifest에 없는 variant type: {sorted(missing)}")
@@ -43,6 +45,7 @@ async def create_run(body: RunCreate, db: Session = Depends(get_session)):
         model_id=body.model_id,
         provider=info.provider,
         api_path="vertex" if (info.provider == "gemini" and settings.use_vertexai) else "api-key",
+        media_resolution=body.media_resolution,
         prompt_version="v1",
         prompt_text=build_prompt(class_list),
         variant_types=body.variant_types,

@@ -11,7 +11,12 @@ export interface ModelInfo {
   usd_per_m_input: number
   usd_per_m_output: number
   thinking: boolean
+  supports_media_resolution: boolean
 }
+
+export type MediaResolution = 'low' | 'medium' | 'high'
+// count_tokens 실측 (Gemini 3 계열, 이미지 1장당). 미지정 = high
+export const MEDIA_RES_IMAGE_TOKENS: Record<MediaResolution, number> = { low: 280, medium: 560, high: 1120 }
 
 export type VariantType = 'original' | 'resize512' | 'resize256' | 'q85' | 'q50'
 export const VARIANT_TYPES: VariantType[] = ['original', 'resize512', 'resize256', 'q85', 'q50']
@@ -37,6 +42,7 @@ export interface Run {
   model_id: string
   provider: string
   api_path: string
+  media_resolution: MediaResolution | null
   prompt_version: string
   variant_types: VariantType[]
   concurrency: number
@@ -71,6 +77,9 @@ export interface AggRow {
   input_tokens: number
   output_tokens: number
   cost_usd: number
+  avg_input_tokens: number | null
+  avg_output_tokens: number | null
+  avg_bytes: number | null
 }
 
 export interface Prediction {

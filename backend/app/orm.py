@@ -83,6 +83,8 @@ class Run(Base):
     # 호출 경로: 'api-key'(AI Studio) | 'vertex' — 경로별 이미지 토큰화가 달라
     # 같은 모델이어도 호출당 비용이 다르므로 비교 시 구분 필요
     api_path: Mapped[str] = mapped_column(String, default="api-key")
+    # 'low'|'medium'|'high', None = 미지정(모델 기본값, Gemini 3는 high와 동일)
+    media_resolution: Mapped[str | None] = mapped_column(String, nullable=True)
     prompt_version: Mapped[str] = mapped_column(String, default="v1")
     prompt_text: Mapped[str] = mapped_column(Text)
     variant_types: Mapped[list] = mapped_column(JSON)

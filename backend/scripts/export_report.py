@@ -61,6 +61,7 @@ def main() -> None:
                     "model_id": r.model_id,
                     "provider": r.provider,
                     "api_path": r.api_path,
+                    "media_resolution": r.media_resolution,
                     "prompt_version": r.prompt_version,
                     "variant_types": r.variant_types,
                     "concurrency": r.concurrency,

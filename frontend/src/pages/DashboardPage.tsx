@@ -2,21 +2,72 @@ import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import {
-  Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart,
-  ResponsiveContainer, Tooltip, XAxis, YAxis,
+  Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart,
+  ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts'
 import { api, onImgError, sampleImageUrl, variantImageUrl } from '../api/client'
 import type { AggRow, VariantType } from '../api/types'
 import { VARIANT_TYPES } from '../api/types'
+import {
+  BAR_CATEGORY_GAP, BAR_GAP, BAR_RADIUS_H, BAR_RADIUS_V, CATEGORICAL, CATEGORICAL_OTHER,
+  DIVERGING, INK, SEQUENTIAL_RGB, SERIES, STATUS, axisProps, gridProps, legendProps, tooltipProps,
+} from '../theme/chart'
 
-const COLORS = ['#4353ff', '#ff8b3d']
-
-// 카테고리 도넛용 검증된 categorical 팔레트 (7색 + 기타는 회색)
-const PIE_COLORS = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#4a3aa7']
-const PIE_OTHER = '#9a9a94'
+// A/B 계열색 — 슬롯 고정(A=Blue Ivy, B=Clay). 계열 수가 줄어도 색이 재배치되지 않는다.
+const COLORS = SERIES
+const PIE_COLORS = CATEGORICAL
+const PIE_OTHER = CATEGORICAL_OTHER
 
 function pct(v: number | null | undefined): string {
   return v == null ? '–' : `${(v * 100).toFixed(1)}%`
+}
+
+function fmtMs(v: number): string {
+  if (v < 1000) return `${Math.round(v)}ms`
+  const s = v / 1000
+  return s >= 10 ? `${Math.round(s)}s` : `${+s.toFixed(1)}s`
+}
+
+function quantile(sorted: number[], q: number): number {
+  return sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * q))]
+}
+
+// 레이턴시는 꼬리가 매우 길어서(중앙값 1~4초, 최대 수백 초) 선형 축으로는
+// 대부분이 한 칸에 뭉개진다 → log 축 위에서 히스토그램을 만든다.
+function buildLatencyHistogram(sel: number[], base: number[], selKey: string) {
+  const all = base.length ? [...sel, ...base] : sel
+  const lo = Math.max(1, Math.min(...all))
+  const hi = Math.max(...all)
+  const BINS = 40
+  const llo = Math.log10(lo)
+  const step = (Math.log10(hi + 1) - llo) / BINS || 1
+  const counts = { sel: new Array<number>(BINS).fill(0), base: new Array<number>(BINS).fill(0) }
+  const put = (xs: number[], c: number[]) => {
+    for (const v of xs) c[Math.min(BINS - 1, Math.floor((Math.log10(Math.max(v, lo)) - llo) / step))]++
+  }
+  put(sel, counts.sel)
+  put(base, counts.base)
+  const data = counts.sel.map((_, i) => ({
+    x: Math.round(10 ** (llo + (i + 0.5) * step)),
+    [selKey]: counts.sel[i],
+    ...(base.length ? { original: counts.base[i] } : {}),
+  }))
+  const ticks = [100, 300, 1000, 3000, 10000, 30000, 100000, 300000].filter((t) => t >= lo && t <= hi)
+  const s = [...sel].sort((a, b) => a - b)
+  return {
+    data,
+    ticks,
+    median: quantile(s, 0.5),
+    baseMedian: base.length ? quantile([...base].sort((a, b) => a - b), 0.5) : null,
+    stats: {
+      n: s.length,
+      mean: s.reduce((a, b) => a + b, 0) / s.length,
+      p90: quantile(s, 0.9),
+      p99: quantile(s, 0.99),
+      max: s[s.length - 1],
+      over10s: s.filter((v) => v > 10000).length,
+    },
+  }
 }
 
 export default function DashboardPage() {
@@ -29,6 +80,7 @@ export default function DashboardPage() {
   const [selectedRuns, setSelectedRuns] = useState<number[]>([])
   const [showAllMatrix, setShowAllMatrix] = useState(false)
   const [dialogCell, setDialogCell] = useState<{ cls: string; vt: VariantType | null } | null>(null)
+  const [distCell, setDistCell] = useState<{ rid: number; vt: VariantType } | null>(null)
   const [lightbox, setLightbox] = useState<{ sampleId: number; label: string } | null>(null)
   const effective = selectedRuns.length ? selectedRuns : doneRuns.slice(0, 1).map((r) => r.id)
   const isCompare = effective.length === 2
@@ -36,7 +88,9 @@ export default function DashboardPage() {
   const runName = (id: number) => {
     const r = runs?.find((x) => x.id === id)
     return r
-      ? `#${r.id} ${r.name} (${r.model_id}${r.provider === 'gemini' && r.api_path ? `, ${r.api_path}` : ''})`
+      ? `#${r.id} ${r.name} (${r.model_id}${r.provider === 'gemini' && r.api_path ? `, ${r.api_path}` : ''}${
+          r.media_resolution ? `, res=${r.media_resolution}` : ''
+        })`
       : `#${id}`
   }
 
@@ -78,6 +132,19 @@ export default function DashboardPage() {
 
   const runTotal = (rid: number) => byRun?.find((r) => r.run_id === rid)
 
+  const { data: distLatencies } = useQuery({
+    queryKey: ['latencies', distCell?.rid],
+    queryFn: () => api.latencies(distCell!.rid),
+    enabled: distCell != null,
+    staleTime: Infinity,
+  })
+  const distChart = useMemo(() => {
+    const sel = distCell && distLatencies?.[distCell.vt]
+    if (!distCell || !sel?.length) return null
+    const base = distCell.vt !== 'original' ? (distLatencies?.original ?? []) : []
+    return buildLatencyHistogram(sel, base, distCell.vt)
+  }, [distCell, distLatencies])
+
   // 변형별 차트: run별 시리즈
   const variantChart = useMemo(() => {
     if (!byVariant) return []
@@ -98,6 +165,31 @@ export default function DashboardPage() {
       effective.forEach((rid) => {
         const found = byVariant.find((r) => r.run_id === rid && r.variant_type === vt)
         if (found?.avg_latency_ms != null) row[runName(rid)] = Math.round(found.avg_latency_ms)
+      })
+      return row
+    }).filter((r) => Object.keys(r).length > 1)
+  }, [byVariant, effective, runs])
+
+  // 변형별 비용: 1,000건당 비용($)과 호출당 평균 입력 토큰 — run별 시리즈
+  const costChart = useMemo(() => {
+    if (!byVariant) return []
+    return VARIANT_TYPES.map((vt) => {
+      const row: Record<string, string | number> = { variant: vt }
+      effective.forEach((rid) => {
+        const found = byVariant.find((r) => r.run_id === rid && r.variant_type === vt)
+        if (found?.count) row[runName(rid)] = +((found.cost_usd / found.count) * 1000).toFixed(4)
+      })
+      return row
+    }).filter((r) => Object.keys(r).length > 1)
+  }, [byVariant, effective, runs])
+
+  const tokenChart = useMemo(() => {
+    if (!byVariant) return []
+    return VARIANT_TYPES.map((vt) => {
+      const row: Record<string, string | number> = { variant: vt }
+      effective.forEach((rid) => {
+        const found = byVariant.find((r) => r.run_id === rid && r.variant_type === vt)
+        if (found?.avg_input_tokens != null) row[runName(rid)] = Math.round(found.avg_input_tokens)
       })
       return row
     }).filter((r) => Object.keys(r).length > 1)
@@ -152,7 +244,8 @@ export default function DashboardPage() {
     )
   }, [matrixData, effective, showAllMatrix])
 
-  // run별 오답 카테고리 분포: 상위 7개 + 기타 (도넛)
+  // run별 오답 카테고리 분포: 상위 7개 + 나머지 롤업 (도넛)
+  // 주의: 데이터셋에 "기타"라는 실제 카테고리가 존재하므로 롤업 버킷은 "그 외"로 구분한다.
   const wrongPies = useMemo(() => {
     if (!byCategory) return []
     return effective.map((rid) => {
@@ -169,7 +262,7 @@ export default function DashboardPage() {
       const rest = rows.slice(7).reduce((s, r) => s + r.wrong, 0)
       const data = [
         ...top.map((r, i) => ({ name: r.category, value: r.wrong, fill: PIE_COLORS[i] })),
-        ...(rest > 0 ? [{ name: '기타', value: rest, fill: PIE_OTHER }] : []),
+        ...(rest > 0 ? [{ name: '그 외', value: rest, fill: PIE_OTHER }] : []),
       ]
       const total = data.reduce((s, d) => s + d.value, 0)
       return { rid, data, total }
@@ -205,28 +298,33 @@ export default function DashboardPage() {
     if (a == null || b == null) return '–'
     const d = unit === '%p' ? (a - b) * 100 : a - b
     const s = d > 0 ? '+' : ''
-    const color = Math.abs(d) < 1e-9 ? '#889' : d > 0 ? '#4353ff' : '#ff8b3d'
+    const color = Math.abs(d) < 1e-9 ? STATUS.neutral : d > 0 ? COLORS[0] : COLORS[1]
     const text = unit === '%p' ? `${s}${d.toFixed(1)}%p` : unit === 'ms' ? `${s}${Math.round(d)}ms` : `${s}$${d.toFixed(3)}`
     return <span style={{ color, fontWeight: 600 }}>{text}</span>
   }
 
   return (
     <div>
-      <h2>프로파일링 대시보드</h2>
+      <header className="page-head">
+        <h1>프로파일링 대시보드</h1>
+        <p className="page-sub">
+          변형(해상도·압축)별, 클래스별, 모델별 정확도·지연·비용을 봅니다. run을 2개 고르면
+          A/B 비교 모드로 바뀝니다.
+        </p>
+      </header>
 
       <div className="card">
         <label>비교할 Run (최대 2개 — 2개 선택 시 A/B 비교 모드)</label>
-        <div>
+        <div className="run-picker">
           {doneRuns.map((r) => {
             const checked = effective.includes(r.id)
             const idx = effective.indexOf(r.id)
             return (
               <label
                 key={r.id}
-                style={{
-                  display: 'inline-block', marginRight: 14, fontSize: 13,
-                  opacity: !checked && effective.length >= 2 ? 0.4 : 1,
-                }}
+                className={`run-opt${checked ? ' on' : ''}${
+                  !checked && effective.length >= 2 ? ' off' : ''
+                }`}
               >
                 <input
                   type="checkbox"
@@ -235,9 +333,15 @@ export default function DashboardPage() {
                   onChange={(e) => toggleRun(r.id, e.target.checked)}
                 />{' '}
                 {checked && isCompare && (
-                  <strong style={{ color: COLORS[idx] }}>{idx === 0 ? 'A ' : 'B '}</strong>
+                  <span className="chip-legend">
+                    <span className="swatch" style={{ background: COLORS[idx] }} />
+                    {idx === 0 ? 'A' : 'B'}
+                  </span>
                 )}
-                #{r.id} {r.name} <span className="muted">({r.model_id})</span>
+                #{r.id} {r.name}{' '}
+                <span className="muted">
+                  ({r.model_id}{r.media_resolution ? `, res=${r.media_resolution}` : ''})
+                </span>
               </label>
             )
           })}
@@ -247,13 +351,24 @@ export default function DashboardPage() {
 
       {isCompare ? (
         <div className="card">
-          <h3 style={{ marginTop: 0 }}>A/B 비교 요약</h3>
-          <table>
+          <h3>A/B 비교 요약</h3>
+          <div style={{ overflowX: 'auto' }}>
+          <table className="kv-table">
             <thead>
               <tr>
                 <th>지표</th>
-                <th style={{ color: COLORS[0] }}>A: {runName(effective[0])}</th>
-                <th style={{ color: COLORS[1] }}>B: {runName(effective[1])}</th>
+                <th>
+                  <span className="chip-legend">
+                    <span className="swatch" style={{ background: COLORS[0] }} /> A
+                  </span>{' '}
+                  {runName(effective[0])}
+                </th>
+                <th>
+                  <span className="chip-legend">
+                    <span className="swatch" style={{ background: COLORS[1] }} /> B
+                  </span>{' '}
+                  {runName(effective[1])}
+                </th>
                 <th>차이 (A−B)</th>
               </tr>
             </thead>
@@ -299,6 +414,7 @@ export default function DashboardPage() {
               })()}
             </tbody>
           </table>
+          </div>
         </div>
       ) : (
         single && (
@@ -314,23 +430,29 @@ export default function DashboardPage() {
       )}
 
       <div className="card">
-        <h3 style={{ marginTop: 0 }}>변형(해상도/압축)별 정확도 — 같은 사진 기준</h3>
+        <h3>변형(해상도/압축)별 정확도 — 같은 사진 기준</h3>
         <ResponsiveContainer width="100%" height={280}>
-          <BarChart data={variantChart}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="variant" />
-            <YAxis unit="%" domain={[0, 100]} />
-            <Tooltip />
-            <Legend />
+          <BarChart data={variantChart} barGap={BAR_GAP} barCategoryGap={BAR_CATEGORY_GAP}>
+            <CartesianGrid {...gridProps} />
+            <XAxis dataKey="variant" {...axisProps} />
+            <YAxis unit="%" domain={[0, 100]} {...axisProps} />
+            <Tooltip {...tooltipProps} />
+            {effective.length > 1 && <Legend {...legendProps} />}
             {effective.map((rid, i) => (
-              <Bar key={rid} dataKey={runName(rid)} fill={COLORS[i % COLORS.length]} />
+              <Bar
+                key={rid}
+                dataKey={runName(rid)}
+                fill={COLORS[i % COLORS.length]}
+                radius={BAR_RADIUS_V}
+                maxBarSize={56}
+              />
             ))}
           </BarChart>
         </ResponsiveContainer>
       </div>
 
       <div className="card">
-        <h3 style={{ marginTop: 0 }}>원본 대비 상대 성능</h3>
+        <h3>원본 대비 상대 성능</h3>
         <p className="muted" style={{ marginTop: 0 }}>
           같은 사진들의 original 결과를 100% 기준으로, 각 변형이 상대적으로 얼마나 나빠지는지 / 빨라지는지.
         </p>
@@ -340,8 +462,14 @@ export default function DashboardPage() {
           if (!rows.length) return null
           return (
             <div key={rid} style={{ marginBottom: 18 }}>
-              <strong style={{ fontSize: 13, color: isCompare ? COLORS[effective.indexOf(rid)] : undefined }}>
-                {isCompare ? (effective.indexOf(rid) === 0 ? 'A: ' : 'B: ') : ''}{runName(rid)}
+              <strong style={{ fontSize: 13 }}>
+                {isCompare && (
+                  <span className="chip-legend">
+                    <span className="swatch" style={{ background: COLORS[effective.indexOf(rid)] }} />
+                    {effective.indexOf(rid) === 0 ? 'A' : 'B'}
+                  </span>
+                )}{' '}
+                {runName(rid)}
               </strong>
               {!base && <span className="muted"> — original 변형이 없어 상대 비교 불가</span>}
               <table style={{ marginTop: 6 }}>
@@ -365,9 +493,22 @@ export default function DashboardPage() {
                     const latRatio =
                       base?.avg_latency_ms != null && base.avg_latency_ms > 0 && r.avg_latency_ms != null
                         ? r.avg_latency_ms / base.avg_latency_ms : null
-                    const dpColor = dp == null || isBase ? '#889' : dp < -1 ? '#c22' : dp > 1 ? '#147a3d' : '#889'
+                    const dpColor =
+                      dp == null || isBase
+                        ? STATUS.neutral
+                        : dp < -1
+                          ? STATUS.danger
+                          : dp > 1
+                            ? STATUS.ok
+                            : STATUS.neutral
+                    const isOpen = distCell?.rid === rid && distCell.vt === vt
                     return (
-                      <tr key={vt}>
+                      <tr
+                        key={vt}
+                        onClick={() => setDistCell(isOpen ? null : { rid, vt })}
+                        style={{ cursor: 'pointer', background: isOpen ? 'var(--bg-selected)' : undefined }}
+                        title="클릭하면 처리시간 분포를 봅니다"
+                      >
                         <td>{vt}{isBase && <span className="muted"> (기준)</span>}</td>
                         <td>{pct(acc)}</td>
                         <td>{isBase ? '100%' : rel != null ? `${rel.toFixed(1)}%` : '–'}</td>
@@ -377,37 +518,203 @@ export default function DashboardPage() {
                         <td>{r.avg_latency_ms != null ? `${Math.round(r.avg_latency_ms)}ms` : '–'}</td>
                         <td>
                           {isBase ? '×1.00' : latRatio != null ? `×${latRatio.toFixed(2)}` : '–'}
-                          {!isBase && latRatio != null && latRatio < 0.95 && <span style={{ color: '#147a3d' }}> (빠름)</span>}
-                          {!isBase && latRatio != null && latRatio > 1.05 && <span style={{ color: '#c22' }}> (느림)</span>}
+                          {!isBase && latRatio != null && latRatio < 0.95 && <span style={{ color: STATUS.ok }}> (빠름)</span>}
+                          {!isBase && latRatio != null && latRatio > 1.05 && <span style={{ color: STATUS.danger }}> (느림)</span>}
                         </td>
                       </tr>
                     )
                   })}
                 </tbody>
               </table>
+              {distCell?.rid === rid && (
+                <div className="inset">
+                  <strong style={{ fontSize: 13 }}>
+                    {distCell.vt} 처리시간 분포
+                    {distCell.vt !== 'original' && <span className="muted"> — original과 겹쳐 보기</span>}
+                  </strong>
+                  {!distChart ? (
+                    <p className="muted">불러오는 중…</p>
+                  ) : (
+                    <>
+                      <ResponsiveContainer width="100%" height={240}>
+                        <AreaChart data={distChart.data} margin={{ top: 8, right: 16 }}>
+                          <CartesianGrid {...gridProps} />
+                          <XAxis
+                            dataKey="x"
+                            type="number"
+                            scale="log"
+                            domain={['dataMin', 'dataMax']}
+                            ticks={distChart.ticks}
+                            tickFormatter={fmtMs}
+                            {...axisProps}
+                          />
+                          <YAxis
+                            allowDecimals={false}
+                            {...axisProps}
+                            label={{ value: '건수', angle: -90, position: 'insideLeft', fontSize: 11, fill: INK.tick }}
+                          />
+                          <Tooltip
+                            {...tooltipProps}
+                            cursor={{ stroke: INK.axis, strokeDasharray: '3 3' }}
+                            labelFormatter={(v) => `~${fmtMs(Number(v))} 부근`}
+                            formatter={(v: number, name: string) => [`${v}건`, name]}
+                          />
+                          <Legend {...legendProps} />
+                          {distCell.vt !== 'original' && (
+                            <Area type="monotone" dataKey="original" stroke={INK.faint} fill={INK.faint} fillOpacity={0.18} strokeWidth={2} />
+                          )}
+                          <Area type="monotone" dataKey={distCell.vt} stroke={COLORS[0]} fill={COLORS[0]} fillOpacity={0.24} strokeWidth={2} />
+                          <ReferenceLine
+                            x={distChart.median}
+                            stroke={COLORS[0]}
+                            strokeDasharray="4 3"
+                            label={{ value: `중앙값 ${fmtMs(distChart.median)}`, fontSize: 11, fill: COLORS[0], position: 'top' }}
+                          />
+                          {distChart.baseMedian != null && (
+                            <ReferenceLine x={distChart.baseMedian} stroke={INK.faint} strokeDasharray="4 3" />
+                          )}
+                        </AreaChart>
+                      </ResponsiveContainer>
+                      <p className="muted" style={{ marginBottom: 0 }}>
+                        n={distChart.stats.n.toLocaleString()} · 중앙값 {fmtMs(distChart.median)} · 평균{' '}
+                        {fmtMs(distChart.stats.mean)} · p90 {fmtMs(distChart.stats.p90)} · p99{' '}
+                        {fmtMs(distChart.stats.p99)} · 최대 {fmtMs(distChart.stats.max)} · 10초 초과{' '}
+                        {distChart.stats.over10s}건 — 가로축은 log 스케일입니다. 평균은 오른쪽 꼬리(이상치)에
+                        끌려가고, 몸통의 위치는 중앙값이 보여줍니다.
+                      </p>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
           )
         })}
+        <p className="muted">행을 클릭하면 그 변형의 처리시간 분포를 original과 겹쳐 볼 수 있습니다.</p>
       </div>
 
       <div className="card">
-        <h3 style={{ marginTop: 0 }}>변형별 평균 처리시간 (ms)</h3>
+        <h3>변형별 평균 처리시간 (ms)</h3>
         <ResponsiveContainer width="100%" height={280}>
-          <BarChart data={latencyChart}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="variant" />
-            <YAxis unit="ms" />
-            <Tooltip />
-            <Legend />
+          <BarChart data={latencyChart} barGap={BAR_GAP} barCategoryGap={BAR_CATEGORY_GAP}>
+            <CartesianGrid {...gridProps} />
+            <XAxis dataKey="variant" {...axisProps} />
+            <YAxis unit="ms" {...axisProps} />
+            <Tooltip {...tooltipProps} />
+            {effective.length > 1 && <Legend {...legendProps} />}
             {effective.map((rid, i) => (
-              <Bar key={rid} dataKey={runName(rid)} fill={COLORS[i % COLORS.length]} />
+              <Bar
+                key={rid}
+                dataKey={runName(rid)}
+                fill={COLORS[i % COLORS.length]}
+                radius={BAR_RADIUS_V}
+                maxBarSize={56}
+              />
             ))}
           </BarChart>
         </ResponsiveContainer>
       </div>
 
       <div className="card">
-        <h3 style={{ marginTop: 0 }}>
+        <h3>변형별 처리 비용 · 토큰</h3>
+        <p className="muted" style={{ marginTop: 0 }}>
+          같은 사진을 변형만 바꿔 보냈을 때의 호출당 비용과 입력/출력 토큰. 입력 토큰에는 프롬프트(클래스 목록)가
+          포함되어 있어, 변형 간 차이가 곧 이미지 토큰 차이입니다.
+        </p>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 16 }}>
+          {[
+            { title: '1,000건당 비용 ($)', data: costChart, fmt: (v: number) => `$${v.toFixed(3)}` },
+            { title: '호출당 평균 입력 토큰', data: tokenChart, fmt: (v: number) => v.toLocaleString() },
+          ].map((c) => (
+            <div key={c.title}>
+              <strong style={{ fontSize: 13 }}>{c.title}</strong>
+              <ResponsiveContainer width="100%" height={240}>
+                <BarChart data={c.data} barGap={BAR_GAP} barCategoryGap={BAR_CATEGORY_GAP}>
+                  <CartesianGrid {...gridProps} />
+                  <XAxis dataKey="variant" {...axisProps} />
+                  <YAxis {...axisProps} tickFormatter={(v: number) => c.fmt(v)} width={64} />
+                  <Tooltip {...tooltipProps} formatter={(v: number, name: string) => [c.fmt(v), name]} />
+                  {effective.length > 1 && <Legend {...legendProps} />}
+                  {effective.map((rid, i) => (
+                    <Bar
+                      key={rid}
+                      dataKey={runName(rid)}
+                      fill={COLORS[i % COLORS.length]}
+                      radius={BAR_RADIUS_V}
+                      maxBarSize={48}
+                    />
+                  ))}
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          ))}
+        </div>
+        {effective.map((rid) => {
+          const rows = byVariant?.filter((r) => r.run_id === rid) ?? []
+          const base = rows.find((r) => r.variant_type === 'original')
+          if (!rows.length) return null
+          const perCall = (r: AggRow) => (r.count ? r.cost_usd / r.count : null)
+          const baseCost = base ? perCall(base) : null
+          const baseIn = base?.avg_input_tokens ?? null
+          return (
+            <div key={rid} style={{ marginTop: 18 }}>
+              <strong style={{ fontSize: 13 }}>
+                {isCompare && (
+                  <span className="chip-legend">
+                    <span className="swatch" style={{ background: COLORS[effective.indexOf(rid)] }} />
+                    {effective.indexOf(rid) === 0 ? 'A' : 'B'}
+                  </span>
+                )}{' '}
+                {runName(rid)}
+              </strong>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ marginTop: 6 }}>
+                  <thead>
+                    <tr>
+                      <th>변형</th><th>평균 파일 크기</th><th>입력 토큰/호출</th><th>원본 대비</th>
+                      <th>출력 토큰/호출</th><th>호출당 비용</th><th>1,000건당</th><th>비용 배율</th>
+                      <th>총 입력 토큰</th><th>총 비용</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {VARIANT_TYPES.map((vt) => {
+                      const r = rows.find((x) => x.variant_type === vt)
+                      if (!r) return null
+                      const isBase = vt === 'original'
+                      const c = perCall(r)
+                      const ratio = baseCost && c != null ? c / baseCost : null
+                      const dIn =
+                        baseIn != null && r.avg_input_tokens != null ? r.avg_input_tokens - baseIn : null
+                      const ratioColor =
+                        ratio == null || isBase
+                          ? STATUS.neutral
+                          : ratio < 0.97 ? STATUS.ok : ratio > 1.03 ? STATUS.danger : STATUS.neutral
+                      return (
+                        <tr key={vt}>
+                          <td>{vt}{isBase && <span className="muted"> (기준)</span>}</td>
+                          <td>{r.avg_bytes != null ? `${(r.avg_bytes / 1024).toFixed(1)}KB` : '–'}</td>
+                          <td>{r.avg_input_tokens != null ? Math.round(r.avg_input_tokens).toLocaleString() : '–'}</td>
+                          <td>{isBase ? '–' : dIn != null ? `${dIn > 0 ? '+' : ''}${Math.round(dIn).toLocaleString()}` : '–'}</td>
+                          <td>{r.avg_output_tokens != null ? r.avg_output_tokens.toFixed(1) : '–'}</td>
+                          <td>{c != null ? `$${c.toFixed(6)}` : '–'}</td>
+                          <td>{c != null ? `$${(c * 1000).toFixed(3)}` : '–'}</td>
+                          <td style={{ color: ratioColor, fontWeight: isBase ? 400 : 600 }}>
+                            {isBase ? '×1.00' : ratio != null ? `×${ratio.toFixed(2)}` : '–'}
+                          </td>
+                          <td>{r.input_tokens.toLocaleString()}</td>
+                          <td>${r.cost_usd.toFixed(4)}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      <div className="card">
+        <h3>
           클래스별 정확도 {isCompare ? '(A/B 차이 큰 순)' : '(낮은 순)'}
         </h3>
         <div style={{ overflowX: 'auto' }}>
@@ -416,19 +723,33 @@ export default function DashboardPage() {
               data={classChart}
               layout="vertical"
               margin={{ left: 60 }}
+              barGap={BAR_GAP}
+              barCategoryGap="32%"
               style={{ cursor: 'pointer' }}
               onClick={(state) => {
                 const label = (state as { activeLabel?: string } | null)?.activeLabel
                 if (label) setDialogCell({ cls: label, vt: null })
               }}
             >
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis type="number" unit="%" domain={[0, 100]} />
-              <YAxis type="category" dataKey="label" width={90} tick={{ fontSize: 11 }} interval={0} />
-              <Tooltip />
-              {isCompare && <Legend />}
+              <CartesianGrid {...gridProps} vertical horizontal={false} />
+              <XAxis type="number" unit="%" domain={[0, 100]} {...axisProps} />
+              <YAxis
+                type="category"
+                dataKey="label"
+                width={90}
+                interval={0}
+                {...axisProps}
+              />
+              <Tooltip {...tooltipProps} />
+              {isCompare && <Legend {...legendProps} />}
               {effective.map((rid, i) => (
-                <Bar key={rid} dataKey={runName(rid)} fill={COLORS[i % COLORS.length]} />
+                <Bar
+                  key={rid}
+                  dataKey={runName(rid)}
+                  fill={COLORS[i % COLORS.length]}
+                  radius={BAR_RADIUS_H}
+                  maxBarSize={12}
+                />
               ))}
             </BarChart>
           </ResponsiveContainer>
@@ -437,15 +758,21 @@ export default function DashboardPage() {
       </div>
 
       <div className="card">
-        <h3 style={{ marginTop: 0 }}>오답의 카테고리 분포</h3>
+        <h3>오답의 카테고리 분포</h3>
         <p className="muted" style={{ marginTop: 0 }}>
-          틀린 예측들이 어떤 음식 카테고리에서 나왔는지 (오답 많은 상위 7개 + 기타).
+          틀린 예측들이 어떤 음식 카테고리에서 나왔는지 (오답 많은 상위 7개 + 나머지는 "그 외"로 묶음).
         </p>
         <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
           {wrongPies.map(({ rid, data, total }) => (
             <div key={rid} style={{ flex: '1 1 420px', minWidth: 380 }}>
-              <strong style={{ fontSize: 13, color: isCompare ? COLORS[effective.indexOf(rid)] : undefined }}>
-                {isCompare ? (effective.indexOf(rid) === 0 ? 'A: ' : 'B: ') : ''}{runName(rid)}
+              <strong style={{ fontSize: 13 }}>
+                {isCompare && (
+                  <span className="chip-legend">
+                    <span className="swatch" style={{ background: COLORS[effective.indexOf(rid)] }} />
+                    {effective.indexOf(rid) === 0 ? 'A' : 'B'}
+                  </span>
+                )}{' '}
+                {runName(rid)}
                 <span className="muted"> — 오답 {total.toLocaleString()}건</span>
               </strong>
               {total === 0 ? (
@@ -458,14 +785,16 @@ export default function DashboardPage() {
                         data={data}
                         dataKey="value"
                         nameKey="name"
-                        innerRadius="45%"
-                        outerRadius="80%"
-                        stroke="#fff"
+                        innerRadius="52%"
+                        outerRadius="82%"
+                        stroke={INK.surface}
                         strokeWidth={2}
                       >
                         {data.map((d) => <Cell key={d.name} fill={d.fill} />)}
                       </Pie>
                       <Tooltip
+                        {...tooltipProps}
+                        cursor={false}
                         formatter={(v: number, name: string) =>
                           [`${v.toLocaleString()}건 (${((v / total) * 100).toFixed(1)}%)`, name]
                         }
@@ -478,10 +807,10 @@ export default function DashboardPage() {
                       {data.map((d) => (
                         <tr key={d.name}>
                           <td>
-                            <span style={{
-                              display: 'inline-block', width: 10, height: 10,
-                              background: d.fill, borderRadius: 2, marginRight: 6,
-                            }} />
+                            <span
+                              className="swatch"
+                              style={{ background: d.fill, marginRight: 6, verticalAlign: 0 }}
+                            />
                             {d.name}
                           </td>
                           <td>{d.value.toLocaleString()}</td>
@@ -502,14 +831,20 @@ export default function DashboardPage() {
       </div>
 
       <div className="card">
-        <h3 style={{ marginTop: 0 }}>
+        <h3>
           클래스 × 변형 매트릭스 {isCompare && <span className="muted">— 셀: A / B</span>} (셀 클릭 → 오답 드릴다운)
         </h3>
         {isCompare && (
           <p className="muted" style={{ marginTop: 0 }}>
-            <span style={{ color: COLORS[0], fontWeight: 700 }}>A</span> = {runName(effective[0])}
+            <span className="chip-legend">
+              <span className="swatch" style={{ background: COLORS[0] }} /> A
+            </span>{' '}
+            = {runName(effective[0])}
             {' · '}
-            <span style={{ color: COLORS[1], fontWeight: 700 }}>B</span> = {runName(effective[1])}
+            <span className="chip-legend">
+              <span className="swatch" style={{ background: COLORS[1] }} /> B
+            </span>{' '}
+            = {runName(effective[1])}
           </p>
         )}
         <p className="muted" style={{ marginTop: 0 }}>
@@ -523,7 +858,7 @@ export default function DashboardPage() {
             전체 클래스 보기
           </label>
         </p>
-        <div style={{ maxHeight: 420, overflowY: 'auto' }}>
+        <div className="scroll-y" style={{ maxHeight: 420 }}>
           <table>
             <thead>
               <tr>
@@ -543,13 +878,15 @@ export default function DashboardPage() {
                     let bg: string | undefined
                     if (isCompare && accA != null && accB != null) {
                       const d = accA - accB
+                      // 발산 스케일: 양극은 A/B 계열색, 중앙(차이 없음)은 표면색 그대로
                       bg = d > 0.001
-                        ? `rgba(67, 83, 255, ${Math.min(0.55, Math.abs(d))})`
+                        ? `rgba(${DIVERGING.posRgb}, ${Math.min(0.55, Math.abs(d))})`
                         : d < -0.001
-                          ? `rgba(255, 139, 61, ${Math.min(0.55, Math.abs(d))})`
+                          ? `rgba(${DIVERGING.negRgb}, ${Math.min(0.55, Math.abs(d))})`
                           : undefined
                     } else if (accA != null) {
-                      bg = `rgba(67, 83, 255, ${0.08 + 0.5 * (1 - accA)})`
+                      // 순차 스케일: 한 색상, 정확도가 낮을수록 진하게
+                      bg = `rgba(${SEQUENTIAL_RGB}, ${0.06 + 0.46 * (1 - accA)})`
                     }
                     return (
                       <td
@@ -569,9 +906,20 @@ export default function DashboardPage() {
           </table>
         </div>
         <p className="muted">
-          {isCompare
-            ? '파란 셀 = A가 우세, 주황 셀 = B가 우세 (진할수록 차이 큼).'
-            : '배경이 진할수록 정확도가 낮은 셀입니다.'}
+          {isCompare ? (
+            <>
+              <span className="chip-legend">
+                <span className="swatch" style={{ background: COLORS[0] }} /> A 우세
+              </span>
+              {' · '}
+              <span className="chip-legend">
+                <span className="swatch" style={{ background: COLORS[1] }} /> B 우세
+              </span>
+              {' — 진할수록 차이가 큽니다. 색이 없는 셀은 차이 없음.'}
+            </>
+          ) : (
+            '배경이 진할수록 정확도가 낮은 셀입니다.'
+          )}
         </p>
       </div>
 
@@ -587,9 +935,15 @@ export default function DashboardPage() {
             <p className="muted" style={{ marginTop: 0 }}>
               {isCompare ? (
                 <>
-                  <span style={{ color: COLORS[0], fontWeight: 700 }}>A</span> = {runName(effective[0])}
+                  <span className="chip-legend">
+                    <span className="swatch" style={{ background: COLORS[0] }} /> A
+                  </span>{' '}
+                  = {runName(effective[0])}
                   {' · '}
-                  <span style={{ color: COLORS[1], fontWeight: 700 }}>B</span> = {runName(effective[1])}
+                  <span className="chip-legend">
+                    <span className="swatch" style={{ background: COLORS[1] }} /> B
+                  </span>{' '}
+                  = {runName(effective[1])}
                 </>
               ) : (
                 <>{runName(effective[0])}</>
@@ -647,14 +1001,24 @@ export default function DashboardPage() {
                           </thead>
                           <tbody>
                             <tr>
-                              {isCompare && <td style={{ color: COLORS[0], fontWeight: 700 }}>A</td>}
+                              {isCompare && (
+                                <td>
+                                  <span className="chip-legend">
+                                    <span className="swatch" style={{ background: COLORS[0] }} /> A
+                                  </span>
+                                </td>
+                              )}
                               {VARIANT_TYPES.map((vt) => (
                                 <td key={vt}>{predBadgeAll(find(itemsA, sid, vt))}</td>
                               ))}
                             </tr>
                             {isCompare && (
                               <tr>
-                                <td style={{ color: COLORS[1], fontWeight: 700 }}>B</td>
+                                <td>
+                                  <span className="chip-legend">
+                                    <span className="swatch" style={{ background: COLORS[1] }} /> B
+                                  </span>
+                                </td>
                                 {VARIANT_TYPES.map((vt) => (
                                   <td key={vt}>{predBadgeAll(find(itemsB, sid, vt))}</td>
                                 ))}
@@ -702,12 +1066,18 @@ export default function DashboardPage() {
                     <div className="info">
                       <div>정답: <strong>{p.class_label}</strong> <span className="muted">(sample #{p.sample_id})</span></div>
                       <div style={{ marginTop: 4 }}>
-                        {isCompare && <span style={{ color: COLORS[0], fontWeight: 700 }}>A </span>}
+                        {isCompare && (
+                          <span className="chip-legend">
+                            <span className="swatch" style={{ background: COLORS[0] }} /> A{' '}
+                          </span>
+                        )}
                         예측: {predBadge(p)}
                       </div>
                       {isCompare && (
                         <div style={{ marginTop: 4 }}>
-                          <span style={{ color: COLORS[1], fontWeight: 700 }}>B </span>
+                          <span className="chip-legend">
+                            <span className="swatch" style={{ background: COLORS[1] }} /> B{' '}
+                          </span>
                           예측: {predBadge(b)}
                         </div>
                       )}

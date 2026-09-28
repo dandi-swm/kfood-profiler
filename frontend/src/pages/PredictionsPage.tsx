@@ -34,7 +34,7 @@ function PredictionCard({ p, onCompare }: { p: Prediction; onCompare: (sampleId:
             <pre>{p.raw_response}</pre>
           </details>
         )}
-        <button className="secondary" style={{ marginTop: 6, fontSize: 12, padding: '4px 10px' }}
+        <button className="secondary tiny" style={{ marginTop: 8 }}
           onClick={() => onCompare(p.sample_id)}>
           이 사진의 변형 비교
         </button>
@@ -54,7 +54,7 @@ function VariantStrip({ runId, sampleId }: { runId: number; sampleId: number }) 
   )
   return (
     <div className="card">
-      <h3 style={{ marginTop: 0 }}>
+      <h3>
         같은 사진 변형 비교 — {ordered[0]?.class_label} (sample #{sampleId})
       </h3>
       <div className="variant-strip">
@@ -120,7 +120,12 @@ export default function PredictionsPage() {
 
   return (
     <div>
-      <h2>예측 드릴다운</h2>
+      <header className="page-head">
+        <h1>예측 드릴다운</h1>
+        <p className="page-sub">
+          개별 예측을 사진과 함께 보고, 같은 사진의 변형 5종이 어디서 갈렸는지 나란히 비교합니다.
+        </p>
+      </header>
       <div className="card">
         <div className="form-row">
           <div>
@@ -171,10 +176,10 @@ export default function PredictionsPage() {
 
       {data && totalPages > 1 && (
         <div style={{ marginTop: 16, display: 'flex', gap: 8, alignItems: 'center' }}>
-          <button className="secondary" disabled={page <= 1}
+          <button className="secondary tiny" disabled={page <= 1}
             onClick={() => setParam('page', String(page - 1))}>이전</button>
           <span className="muted">{page} / {totalPages}</span>
-          <button className="secondary" disabled={page >= totalPages}
+          <button className="secondary tiny" disabled={page >= totalPages}
             onClick={() => setParam('page', String(page + 1))}>다음</button>
         </div>
       )}

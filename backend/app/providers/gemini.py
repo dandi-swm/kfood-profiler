@@ -9,9 +9,11 @@ from .base import PredictionResult, ProviderError, RateLimitError, VisionProvide
 
 
 class GeminiProvider(VisionProvider):
-    def __init__(self, model: str, thinking: bool = False):
+    def __init__(self, model: str, thinking: bool = False, media_resolution: str | None = None):
         self.model = model
         self.thinking = thinking
+        # 이미지 파트 단위 해상도. None이면 생략 → 모델 기본값(Gemini 3: high, 1120토큰)
+        self.media_resolution = media_resolution
         # 일부 모델(예: 3.5-flash-lite)은 thinking_budget=0을 400으로 거부하고
         # 기본값이 이미 thinking off다. 첫 400에서 감지해 config 생략으로 폴백.
         self._budget_zero_unsupported = False
@@ -39,6 +41,14 @@ class GeminiProvider(VisionProvider):
             return None
         return genai_types.ThinkingConfig(thinking_budget=0)
 
+    def _image_part(self, image_bytes: bytes, mime: str) -> "genai_types.Part":
+        part = genai_types.Part.from_bytes(data=image_bytes, mime_type=mime)
+        if self.media_resolution:
+            part.media_resolution = genai_types.PartMediaResolution(
+                level=f"MEDIA_RESOLUTION_{self.media_resolution.upper()}"
+            )
+        return part
+
     async def classify(
         self,
         image_bytes: bytes,
@@ -54,10 +64,7 @@ class GeminiProvider(VisionProvider):
             try:
                 response = await self.client.aio.models.generate_content(
                     model=self.model,
-                    contents=[
-                        genai_types.Part.from_bytes(data=image_bytes, mime_type=mime),
-                        prompt,
-                    ],
+                    contents=[self._image_part(image_bytes, mime), prompt],
                     config=genai_types.GenerateContentConfig(
                         # enum 구조화 출력으로 closed-set 분류를 강제
                         response_mime_type="text/x.enum",

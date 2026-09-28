@@ -3,6 +3,7 @@ import type {
   AggRow,
   ClassInfo,
   Manifest,
+  MediaResolution,
   ModelInfo,
   Prediction,
   PredictionPage,
@@ -52,6 +53,7 @@ const liveApi = {
     model_id: string
     variant_types: VariantType[]
     concurrency: number
+    media_resolution: MediaResolution | null
   }) => request<Run>('/api/runs', { method: 'POST', body: JSON.stringify(body) }),
   cancelRun: (id: number) => request(`/api/runs/${id}/cancel`, { method: 'POST' }),
   deleteRun: (id: number) =>
@@ -73,6 +75,9 @@ const liveApi = {
     if (params.variant_type) q.set('variant_type', params.variant_type)
     return request<AggRow[]>(`/api/results/aggregate?${q}`)
   },
+
+  latencies: (runId: number) =>
+    request<Record<string, number[]>>(`/api/results/latencies?run_id=${runId}`),
 
   predictions: (params: {
     run_id: number

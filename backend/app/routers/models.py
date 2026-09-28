@@ -16,6 +16,7 @@ def list_models():
             usd_per_m_input=m.usd_per_m_input,
             usd_per_m_output=m.usd_per_m_output,
             thinking=m.thinking,
+            supports_media_resolution=m.supports_media_resolution,
         )
         for m in MODEL_CATALOG.values()
     ]

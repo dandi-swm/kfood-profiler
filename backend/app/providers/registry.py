@@ -3,7 +3,9 @@ from .base import ProviderError, VisionProvider
 from .mock import MockProvider
 
 
-def create_provider(model_id: str) -> tuple[VisionProvider, ModelInfo]:
+def create_provider(
+    model_id: str, media_resolution: str | None = None
+) -> tuple[VisionProvider, ModelInfo]:
     info = MODEL_CATALOG.get(model_id)
     if info is None:
         raise ProviderError(f"알 수 없는 모델: {model_id}")
@@ -14,5 +16,12 @@ def create_provider(model_id: str) -> tuple[VisionProvider, ModelInfo]:
     if info.provider == "gemini":
         from .gemini import GeminiProvider  # google-genai 미설치 환경 배려한 지연 임포트
 
-        return GeminiProvider(model=info.provider_model, thinking=info.thinking), info
+        return (
+            GeminiProvider(
+                model=info.provider_model,
+                thinking=info.thinking,
+                media_resolution=media_resolution,
+            ),
+            info,
+        )
     raise ProviderError(f"알 수 없는 프로바이더: {info.provider}")

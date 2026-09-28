@@ -19,6 +19,9 @@ class ModelInfo:
     usd_per_m_input: float
     usd_per_m_output: float
     thinking: bool = False  # Gemini thinking 활성 여부 (기본 off: 비용/지연 절감)
+    # media_resolution 지원 여부. Gemini 3 계열은 이미지 토큰이 픽셀 크기가 아니라
+    # 이 값으로 고정된다 (count_tokens 실측: low 280 / medium 560 / high·미지정 1120)
+    supports_media_resolution: bool = False
 
 
 MODEL_CATALOG: dict[str, ModelInfo] = {
@@ -27,6 +30,7 @@ MODEL_CATALOG: dict[str, ModelInfo] = {
         ModelInfo(
             model_id="gemini-3.8-flash",
             provider="gemini",
+            supports_media_resolution=True,
             provider_model="gemini-3.8-flash",
             display_name="Gemini 3.8 Flash",
             usd_per_m_input=0.75,
@@ -35,6 +39,7 @@ MODEL_CATALOG: dict[str, ModelInfo] = {
         ModelInfo(
             model_id="gemini-3.8-flash-thinking",
             provider="gemini",
+            supports_media_resolution=True,
             provider_model="gemini-3.8-flash",
             display_name="Gemini 3.8 Flash (thinking)",
             usd_per_m_input=0.75,
@@ -44,6 +49,7 @@ MODEL_CATALOG: dict[str, ModelInfo] = {
         ModelInfo(
             model_id="gemini-3.5-flash-lite",
             provider="gemini",
+            supports_media_resolution=True,
             provider_model="gemini-3.5-flash-lite",
             display_name="Gemini 3.5 Flash Lite",
             usd_per_m_input=0.30,
@@ -52,6 +58,7 @@ MODEL_CATALOG: dict[str, ModelInfo] = {
         ModelInfo(
             model_id="gemini-3.5-flash-lite-thinking",
             provider="gemini",
+            supports_media_resolution=True,
             provider_model="gemini-3.5-flash-lite",
             display_name="Gemini 3.5 Flash Lite (thinking)",
             usd_per_m_input=0.30,

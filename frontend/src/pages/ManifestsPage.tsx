@@ -46,9 +46,15 @@ export default function ManifestsPage() {
 
   return (
     <div>
-      <h2>샘플셋 (Manifest)</h2>
+      <header className="page-head">
+        <h1>샘플셋</h1>
+        <p className="page-sub">
+          kfood 데이터셋에서 시드 고정 층화 샘플링으로 이미지를 뽑고, 각 이미지마다 해상도·압축
+          변형 5종을 만듭니다. 같은 시드는 언제나 같은 샘플을 뽑으므로 모델 간 비교가 공정해집니다.
+        </p>
+      </header>
       <div className="card">
-        <h3 style={{ marginTop: 0 }}>새 Manifest 만들기</h3>
+        <h3>새 Manifest 만들기</h3>
         <div className="form-row">
           <div>
             <label>이름</label>
@@ -89,7 +95,7 @@ export default function ManifestsPage() {
           해상도 변형이 무의미해 자동 제외됩니다.
         </p>
         {filterOn && (
-          <div style={{ maxHeight: 300, overflowY: 'auto' }}>
+          <div className="scroll-y" style={{ maxHeight: 300, padding: 'var(--sp-3)' }}>
             {[...byCategory.entries()].map(([cat, list]) => (
               <div key={cat} style={{ marginBottom: 6 }}>
                 <strong style={{ fontSize: 13 }}>{cat}</strong>{' '}
@@ -114,7 +120,8 @@ export default function ManifestsPage() {
       </div>
 
       <div className="card">
-        <h3 style={{ marginTop: 0 }}>Manifest 목록</h3>
+        <h3>Manifest 목록</h3>
+        <div className="scroll-y" style={{ maxHeight: 420 }}>
         <table>
           <thead>
             <tr>
@@ -137,7 +144,7 @@ export default function ManifestsPage() {
                 </td>
                 <td className="muted">{new Date(m.created_at + 'Z').toLocaleString('ko')}</td>
                 <td>
-                  <button className="secondary" onClick={() => remove.mutate(m.id)}>삭제</button>
+                  <button className="danger tiny" onClick={() => remove.mutate(m.id)}>삭제</button>
                 </td>
               </tr>
             ))}
@@ -146,11 +153,12 @@ export default function ManifestsPage() {
             )}
           </tbody>
         </table>
+        </div>
       </div>
 
       <div className="card">
-        <h3 style={{ marginTop: 0 }}>데이터셋 클래스 ({totalClasses}개)</h3>
-        <div style={{ maxHeight: 380, overflowY: 'auto' }}>
+        <h3>데이터셋 클래스 ({totalClasses}개)</h3>
+        <div className="scroll-y" style={{ maxHeight: 380 }}>
           <table>
             <thead><tr><th>음식명</th><th>카테고리</th><th>이미지 수</th></tr></thead>
             <tbody>

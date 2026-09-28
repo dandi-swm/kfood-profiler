@@ -33,6 +33,9 @@ def aggregate(
             func.coalesce(func.sum(Prediction.input_tokens), 0).label("input_tokens"),
             func.coalesce(func.sum(Prediction.output_tokens), 0).label("output_tokens"),
             func.coalesce(func.sum(Prediction.cost_usd), 0.0).label("cost_usd"),
+            func.avg(Prediction.input_tokens).label("avg_input_tokens"),
+            func.avg(Prediction.output_tokens).label("avg_output_tokens"),
+            func.avg(Variant.bytes).label("avg_bytes"),
         )
         .join(Variant, Prediction.variant_id == Variant.id)
         .join(Sample, Variant.sample_id == Sample.id)
@@ -62,6 +65,9 @@ def aggregate(
             input_tokens=m["input_tokens"],
             output_tokens=m["output_tokens"],
             cost_usd=m["cost_usd"],
+            avg_input_tokens=m["avg_input_tokens"],
+            avg_output_tokens=m["avg_output_tokens"],
+            avg_bytes=m["avg_bytes"],
         )
         out.append(item)
     return out

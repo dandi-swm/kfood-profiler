@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -18,6 +19,10 @@ class ModelOut(BaseModel):
     usd_per_m_input: float
     usd_per_m_output: float
     thinking: bool = False
+    supports_media_resolution: bool = False
+
+
+MediaResolution = Literal["low", "medium", "high"]
 
 
 class ManifestCreate(BaseModel):
@@ -50,6 +55,7 @@ class RunCreate(BaseModel):
     model_id: str
     variant_types: list[str] = Field(default_factory=lambda: list(VARIANT_TYPES))
     concurrency: int = Field(default=4, ge=1, le=32)
+    media_resolution: MediaResolution | None = None
 
 
 class RunOut(BaseModel):
@@ -59,6 +65,7 @@ class RunOut(BaseModel):
     model_id: str
     provider: str
     api_path: str = "api-key"
+    media_resolution: str | None = None
     prompt_version: str
     variant_types: list[str]
     concurrency: int

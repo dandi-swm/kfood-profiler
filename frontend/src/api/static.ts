@@ -134,6 +134,8 @@ export const staticApi = {
     for (const [key, preds] of groups) {
       const graded = preds.filter((p) => p.is_correct !== null)
       const lats = preds.filter((p) => p.latency_ms !== null)
+      const ins = preds.filter((p) => p.input_tokens != null)
+      const outs = preds.filter((p) => p.output_tokens != null)
       out.push({
         ...(keyValues.get(key) as Partial<AggRow>),
         count: preds.length,
@@ -147,6 +149,13 @@ export const staticApi = {
         input_tokens: preds.reduce((s, p) => s + (p.input_tokens ?? 0), 0),
         output_tokens: preds.reduce((s, p) => s + (p.output_tokens ?? 0), 0),
         cost_usd: preds.reduce((s, p) => s + (p.cost_usd ?? 0), 0),
+        avg_input_tokens: ins.length
+          ? ins.reduce((s, p) => s + (p.input_tokens ?? 0), 0) / ins.length
+          : null,
+        avg_output_tokens: outs.length
+          ? outs.reduce((s, p) => s + (p.output_tokens ?? 0), 0) / outs.length
+          : null,
+        avg_bytes: preds.length ? preds.reduce((s, p) => s + p.bytes, 0) / preds.length : null,
       })
     }
     out.sort((a, b) => {
@@ -157,6 +166,16 @@ export const staticApi = {
       }
       return 0
     })
+    return out
+  },
+
+  latencies: async (runId: number): Promise<Record<string, number[]>> => {
+    const preds = await loadPreds(runId)
+    const out: Record<string, number[]> = {}
+    for (const p of preds) {
+      if (p.latency_ms == null) continue
+      ;(out[p.variant_type] ??= []).push(p.latency_ms)
+    }
     return out
   },
 

@@ -145,7 +145,7 @@ async def execute_run(run_id: int) -> None:
         db.commit()
 
         try:
-            provider, _info = create_provider(run.model_id)
+            provider, _info = create_provider(run.model_id, run.media_resolution)
         except ProviderError as e:
             run.status = "failed"
             run.error = str(e)

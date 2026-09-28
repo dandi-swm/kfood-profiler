@@ -24,8 +24,18 @@ def _set_sqlite_pragma(dbapi_connection, _connection_record):
 SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
 
 
+# create_all은 기존 테이블에 컬럼을 추가하지 않으므로, 이후 추가된 nullable 컬럼은 여기서 보강
+_ADDED_COLUMNS = {"runs": {"media_resolution": "VARCHAR"}}
+
+
 def init_db() -> None:
     Base.metadata.create_all(engine)
+    with engine.begin() as conn:
+        for table, cols in _ADDED_COLUMNS.items():
+            existing = {row[1] for row in conn.exec_driver_sql(f"PRAGMA table_info({table})")}
+            for col, ddl in cols.items():
+                if col not in existing:
+                    conn.exec_driver_sql(f"ALTER TABLE {table} ADD COLUMN {col} {ddl}")
 
 
 def get_session():

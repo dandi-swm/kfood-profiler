@@ -33,6 +33,20 @@ def results_aggregate(
     )
 
 
+@router.get("/results/latencies")
+def results_latencies(run_id: int, db: Session = Depends(get_session)):
+    """run의 변형별 latency_ms 원본 배열 (분포 차트용)."""
+    rows = db.execute(
+        select(Variant.variant_type, Prediction.latency_ms)
+        .join(Variant, Prediction.variant_id == Variant.id)
+        .where(Prediction.run_id == run_id, Prediction.latency_ms.is_not(None))
+    ).all()
+    out: dict[str, list[int]] = {}
+    for vt, lat in rows:
+        out.setdefault(vt, []).append(lat)
+    return out
+
+
 @router.get("/predictions", response_model=PredictionPage)
 def list_predictions(
     run_id: int,

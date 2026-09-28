@@ -1,0 +1,156 @@
+/* =====================================================================
+   K-Food Profiler — 디자인 토큰
+   브랜드 키트: Night Blue / Blue Ivy / Cotton / Slate Granite Gray / Dark Gray
+                Noto Sans · Inter · TT Commons
+   원색은 --brand-* 5개뿐이고, 나머지는 전부 여기서 파생된 스텝이다.
+   컴포넌트 CSS에서는 --brand-*를 직접 쓰지 말고 시맨틱 토큰을 쓴다.
+   ===================================================================== */
+
+:root {
+  /* ---------- 1. 브랜드 원색 (변경 금지 — 브랜드 키트 원본) ---------- */
+  --brand-night-blue: #1a2644;
+  --brand-blue-ivy: #4b8cca;
+  --brand-cotton: #fbfbfb;
+  --brand-slate-granite: #6a7284;
+  --brand-dark-gray: #979ead;
+
+  /* ---------- 2. 파생 램프 ---------- */
+  /* Night Blue 계열 — 앱 크롬(사이드바/탑바)과 최고 대비 텍스트 */
+  --navy-900: #0f1830;
+  --navy-800: #141e38;
+  --navy-700: #1a2644; /* = Night Blue */
+  --navy-600: #24325a;
+  --navy-500: #2f4070;
+  --navy-400: #3c4e82;
+
+  /* Blue Ivy 계열 — 액센트. 500이 브랜드 원색, 600↓는 "흰 글자 4.5:1" 확보용 */
+  --blue-800: #255486;
+  --blue-700: #2b639c;
+  --blue-600: #2f6fae;
+  --blue-500: #4b8cca; /* = Blue Ivy */
+  --blue-300: #8fb8df;
+  --blue-100: #dce9f6;
+  --blue-50: #eef4fb;
+
+  /* 뉴트럴 — Night Blue 쪽으로 살짝 기울인 쿨그레이 (중립 회색은 브랜드와 안 붙는다) */
+  --n-0: #ffffff;
+  --n-25: #fbfbfb; /* = Cotton */
+  --n-50: #f4f7fb;
+  --n-100: #edf1f7;
+  --n-200: #e1e7f0;
+  --n-300: #cbd3e0;
+  --n-400: #979ead; /* = Dark Gray */
+  --n-500: #6a7284; /* = Slate Granite Gray */
+  --n-700: #3c4658;
+  --n-900: #1a2644; /* = Night Blue */
+
+  /* 상태색 — 브랜드 팔레트에 없어서 파생했다.
+     채도를 낮춰 네이비/블루 옆에서 튀지 않게 맞췄고, 전부 흰 배경 4.5:1 이상. */
+  --ok-fg: #1f7a55;
+  --ok-bg: #e3f1ea;
+  --ok-border: #c2ded0;
+  --warn-fg: #8a5a12;
+  --warn-bg: #f6eedf;
+  --warn-border: #e7d6b4;
+  --danger-fg: #b23b2e;
+  --danger-bg: #f8e6e3;
+  --danger-border: #efccc7;
+
+  /* ---------- 3. 시맨틱: 배경 ---------- */
+  --bg-app: var(--n-100);
+  --bg-surface: var(--n-25); /* 카드 */
+  --bg-raised: var(--n-0); /* 모달 등 카드 위에 뜨는 면 */
+  --bg-subtle: var(--n-50); /* 테이블 헤더, 인셋 패널 */
+  --bg-hover: var(--n-100);
+  --bg-selected: var(--blue-50);
+  --bg-chrome: var(--navy-700);
+  --bg-chrome-deep: var(--navy-900);
+  --bg-chrome-hover: var(--navy-600);
+  --bg-scrim: rgba(15, 24, 48, 0.55);
+
+  /* ---------- 4. 시맨틱: 보더 ---------- */
+  --border: var(--n-200);
+  --border-strong: var(--n-300);
+  --border-field: var(--n-300);
+  --border-chrome: rgba(251, 251, 251, 0.1);
+
+  /* ---------- 5. 시맨틱: 텍스트 ----------
+     Dark Gray(#979ead)는 흰 배경에서 2.7:1 → 읽는 텍스트로 쓰지 않는다.
+     보조 텍스트는 Slate Granite Gray(4.7:1)가 담당한다. */
+  --text-strong: var(--n-900); /* 14.9:1 */
+  --text: var(--n-700); /*  9.2:1 */
+  --text-muted: var(--n-500); /*  4.7:1 */
+  --text-faint: var(--n-400); /* 비텍스트·플레이스홀더·disabled 한정 */
+  --text-link: var(--blue-600); /*  5.2:1 */
+  --text-on-chrome: var(--brand-cotton); /* 14.5:1 on navy */
+  --text-on-chrome-muted: #c9d2e2; /*  9.8:1 on navy */
+  --text-on-accent: var(--brand-cotton);
+
+  /* ---------- 6. 시맨틱: 액센트 ---------- */
+  --accent: var(--blue-500); /* 그래픽 전용(언더라인·포커스링·차트) */
+  --accent-strong: var(--blue-600); /* 글자 얹는 면 */
+  --accent-soft: var(--blue-100);
+  --accent-faint: var(--blue-50);
+
+  /* ---------- 7. 타이포그래피 ----------
+     TT Commons는 상용 서체라 웹폰트 CDN이 없다. 라이선스 파일을 받으면
+     아래 @font-face 주석을 풀어 self-host하면 되고, 없으면 Inter로 자연 폴백된다.
+     Inter를 앞에 두는 이유: 라틴/숫자는 Inter가 잡고 한글은 Noto Sans KR로 흘려보내기 위함. */
+  --font-display: 'TT Commons', 'TT Commons Pro', 'Inter', 'Noto Sans KR', -apple-system,
+    'Apple SD Gothic Neo', sans-serif;
+  --font-sans: 'Inter', 'Noto Sans KR', -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo',
+    'Segoe UI', sans-serif;
+  --font-mono: ui-monospace, 'SFMono-Regular', 'SF Mono', Menlo, monospace;
+
+  --fs-display: 23px;
+  --fs-title: 15px;
+  --fs-body: 13.5px;
+  --fs-table: 13px;
+  --fs-label: 12px;
+  --fs-micro: 11px;
+  --fs-metric: 26px;
+
+  --lh-tight: 1.25;
+  --lh-normal: 1.55;
+
+  /* ---------- 8. 스페이싱 / 형태 ---------- */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+
+  --r-sm: 6px;
+  --r-md: 8px;
+  --r-lg: 12px;
+  --r-pill: 999px;
+
+  --sh-1: 0 1px 2px rgba(26, 38, 68, 0.06);
+  --sh-2: 0 2px 4px rgba(26, 38, 68, 0.04), 0 8px 24px rgba(26, 38, 68, 0.07);
+  --sh-3: 0 24px 64px rgba(15, 24, 48, 0.28);
+  --ring: 0 0 0 3px rgba(75, 140, 202, 0.32);
+
+  --topbar-h: 48px;
+  --sidebar-w: 216px;
+  --content-max: 1360px;
+}
+
+/*  TT Commons 라이선스 보유 시 — 파일을 src/assets/fonts/에 넣고 주석 해제
+@font-face {
+  font-family: 'TT Commons';
+  src: url('../assets/fonts/TTCommonsPro-Regular.woff2') format('woff2');
+  font-weight: 400; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'TT Commons';
+  src: url('../assets/fonts/TTCommonsPro-DemiBold.woff2') format('woff2');
+  font-weight: 600; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'TT Commons';
+  src: url('../assets/fonts/TTCommonsPro-Bold.woff2') format('woff2');
+  font-weight: 700; font-style: normal; font-display: swap;
+}
+*/
