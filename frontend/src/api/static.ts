@@ -68,7 +68,8 @@ export const staticApi = {
   createManifest: notAvailable,
   deleteManifest: notAvailable,
 
-  runs: async (): Promise<Run[]> => (await loadMeta()).runs,
+  // 백엔드 GET /api/runs 와 같은 최신순 — 대시보드가 첫 run을 기본 선택하므로 순서가 달라지면 안 된다
+  runs: async (): Promise<Run[]> => [...(await loadMeta()).runs].sort((a, b) => b.id - a.id),
   run: async (id: number): Promise<Run> => {
     const run = (await loadMeta()).runs.find((r) => r.id === id)
     if (!run) throw new Error(`run ${id} 없음`)
